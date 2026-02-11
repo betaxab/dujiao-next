@@ -1,0 +1,71 @@
+package admin
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/dujiao-next/internal/http/response"
+	"github.com/dujiao-next/internal/repository"
+
+	"github.com/gin-gonic/gin"
+)
+
+// GetUserLoginLogs 获取用户登录日志列表
+func (h *Handler) GetUserLoginLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = normalizePagination(page, pageSize)
+
+	userIDRaw := strings.TrimSpace(c.Query("user_id"))
+	email := strings.TrimSpace(c.Query("email"))
+	status := strings.TrimSpace(c.Query("status"))
+	failReason := strings.TrimSpace(c.Query("fail_reason"))
+	clientIP := strings.TrimSpace(c.Query("client_ip"))
+	createdFromRaw := strings.TrimSpace(c.Query("created_from"))
+	createdToRaw := strings.TrimSpace(c.Query("created_to"))
+
+	var userID uint
+	if userIDRaw != "" {
+		raw, err := strconv.ParseUint(userIDRaw, 10, 64)
+		if err != nil {
+			respondError(c, response.CodeBadRequest, "error.bad_request", err)
+			return
+		}
+		userID = uint(raw)
+	}
+
+	createdFrom, err := parseTimeNullable(createdFromRaw)
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	createdTo, err := parseTimeNullable(createdToRaw)
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+
+	logs, total, err := h.UserLoginLogService.ListForAdmin(repository.UserLoginLogListFilter{
+		Page:        page,
+		PageSize:    pageSize,
+		UserID:      userID,
+		Email:       email,
+		Status:      status,
+		FailReason:  failReason,
+		ClientIP:    clientIP,
+		CreatedFrom: createdFrom,
+		CreatedTo:   createdTo,
+	})
+	if err != nil {
+		respondError(c, response.CodeInternal, "error.user_login_log_fetch_failed", err)
+		return
+	}
+
+	pagination := response.Pagination{
+		Page:      page,
+		PageSize:  pageSize,
+		Total:     total,
+		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
+	}
+	response.SuccessWithPage(c, logs, pagination)
+}

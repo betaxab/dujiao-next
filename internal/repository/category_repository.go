@@ -1,0 +1,88 @@
+package repository
+
+import (
+	"errors"
+
+	"github.com/dujiao-next/internal/models"
+
+	"gorm.io/gorm"
+)
+
+// CategoryRepository 分类数据访问接口
+type CategoryRepository interface {
+	List() ([]models.Category, error)
+	GetByID(id string) (*models.Category, error)
+	Create(category *models.Category) error
+	Update(category *models.Category) error
+	Delete(id string) error
+	CountBySlug(slug string, excludeID *string) (int64, error)
+	CountProducts(categoryID string) (int64, error)
+}
+
+// GormCategoryRepository GORM 实现
+type GormCategoryRepository struct {
+	db *gorm.DB
+}
+
+// NewCategoryRepository 创建分类仓库
+func NewCategoryRepository(db *gorm.DB) *GormCategoryRepository {
+	return &GormCategoryRepository{db: db}
+}
+
+// List 分类列表
+func (r *GormCategoryRepository) List() ([]models.Category, error) {
+	var categories []models.Category
+	if err := r.db.Order("sort_order DESC, id ASC").Find(&categories).Error; err != nil {
+		return nil, err
+	}
+	return categories, nil
+}
+
+// GetByID 根据 ID 获取分类
+func (r *GormCategoryRepository) GetByID(id string) (*models.Category, error) {
+	var category models.Category
+	if err := r.db.First(&category, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &category, nil
+}
+
+// Create 创建分类
+func (r *GormCategoryRepository) Create(category *models.Category) error {
+	return r.db.Create(category).Error
+}
+
+// Update 更新分类
+func (r *GormCategoryRepository) Update(category *models.Category) error {
+	return r.db.Save(category).Error
+}
+
+// Delete 删除分类
+func (r *GormCategoryRepository) Delete(id string) error {
+	return r.db.Delete(&models.Category{}, id).Error
+}
+
+// CountBySlug 统计 slug 数量
+func (r *GormCategoryRepository) CountBySlug(slug string, excludeID *string) (int64, error) {
+	var count int64
+	query := r.db.Model(&models.Category{}).Where("slug = ?", slug)
+	if excludeID != nil {
+		query = query.Where("id != ?", *excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// CountProducts 统计某分类下商品数
+func (r *GormCategoryRepository) CountProducts(categoryID string) (int64, error) {
+	var count int64
+	if err := r.db.Model(&models.Product{}).Where("category_id = ?", categoryID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}

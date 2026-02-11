@@ -1,0 +1,72 @@
+package models
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// JSON 类型定义，用于存储多语言内容
+type JSON map[string]interface{}
+
+// Value 实现 driver.Valuer 接口
+func (j JSON) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
+
+// Scan 实现 sql.Scanner 接口
+func (j *JSON) Scan(value interface{}) error {
+	if value == nil {
+		*j = make(JSON)
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+// StringArray 字符串数组类型，用于存储tags、images等
+type StringArray []string
+
+// Value 实现 driver.Valuer 接口
+func (s StringArray) Value() (driver.Value, error) {
+	if s == nil {
+		return nil, nil
+	}
+	return json.Marshal(s)
+}
+
+// Scan 实现 sql.Scanner 接口
+func (s *StringArray) Scan(value interface{}) error {
+	if value == nil {
+		*s = StringArray{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(bytes, s)
+}
+
+// Category 分类表
+type Category struct {
+	ID        uint           `gorm:"primarykey" json:"id"`              // 主键
+	Slug      string         `gorm:"uniqueIndex;not null" json:"slug"`  // 唯一标识
+	NameJSON  JSON           `gorm:"type:json;not null" json:"name"`    // 多语言名称
+	SortOrder int            `gorm:"default:0;index" json:"sort_order"` // 排序权重
+	CreatedAt time.Time      `gorm:"index" json:"created_at"`           // 创建时间
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`                    // 软删除时间
+}
+
+// TableName 指定表名
+func (Category) TableName() string {
+	return "categories"
+}
