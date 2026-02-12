@@ -198,7 +198,23 @@ func resolveLogFilePath(options Options) (string, error) {
 		filename = defaultLogFilename
 	}
 
-	return filepath.Join(dir, filename), nil
+	logFilePath := filepath.Join(dir, filename)
+	if err := ensureLogFileWritable(logFilePath); err != nil {
+		return "", err
+	}
+
+	return logFilePath, nil
+}
+
+func ensureLogFileWritable(logFilePath string) error {
+	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("open log file failed: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close log file failed: %w", err)
+	}
+	return nil
 }
 
 func normalizePositiveInt(value int, fallback int) int {

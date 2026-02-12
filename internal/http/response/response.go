@@ -85,6 +85,11 @@ func Unauthorized(c *gin.Context, msg string) {
 	Error(c, CodeUnauthorized, msg)
 }
 
+// Forbidden 403响应
+func Forbidden(c *gin.Context, msg string) {
+	Error(c, CodeForbidden, msg)
+}
+
 // BadRequest 400响应
 func BadRequest(c *gin.Context, msg string) {
 	Error(c, CodeBadRequest, msg)

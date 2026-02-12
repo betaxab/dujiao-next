@@ -17,15 +17,11 @@ FROM alpine:latest
 WORKDIR /app
 
 RUN apk --no-cache add ca-certificates tzdata \
-    && adduser -D -g '' appuser \
-    && mkdir -p /app/db /app/uploads /app/logs \
-    && chown -R appuser:appuser /app
+    && mkdir -p /app/db /app/uploads /app/logs
 
 COPY --from=builder /out/dujiao-api /app/dujiao-api
 COPY config.yml.example /app/config.yml.example
 
 EXPOSE 8080
-
-USER appuser
 
 CMD ["./dujiao-api"]

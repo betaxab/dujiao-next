@@ -1201,7 +1201,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
 		notifyURL := strings.TrimSpace(cfg.NotifyURL)
-		returnURL := strings.TrimSpace(cfg.ReturnURL)
+		returnURL := appendURLQuery(cfg.ReturnURL, buildOrderReturnQuery(order, "epay_return", ""))
 		ctx := input.Context
 		if ctx == nil {
 			ctx = context.Background()

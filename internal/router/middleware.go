@@ -301,8 +301,8 @@ func AdminRBACMiddleware(authzService *authz.Service) gin.HandlerFunc {
 				"path", c.Request.URL.Path,
 				"resource", authz.NormalizeObject(resource),
 			)
-			msg := i18n.T(i18n.ResolveLocale(c), "error.unauthorized")
-			response.Unauthorized(c, msg)
+			msg := i18n.T(i18n.ResolveLocale(c), "error.forbidden")
+			response.Forbidden(c, msg)
 			c.Abort()
 			return
 		}
