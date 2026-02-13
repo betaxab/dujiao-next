@@ -700,6 +700,7 @@ func (h *Handler) CreateGuestPayment(c *gin.Context) {
 		"pay_url":          result.Payment.PayURL,
 		"qr_code":          result.Payment.QRCode,
 		"expires_at":       result.Payment.ExpiredAt,
+		"provider_payload": result.Payment.ProviderPayload,
 	})
 }
 
@@ -824,5 +825,6 @@ func (h *Handler) GetGuestLatestPayment(c *gin.Context) {
 		"pay_url":          payment.PayURL,
 		"qr_code":          payment.QRCode,
 		"expires_at":       payment.ExpiredAt,
+		"provider_payload": payment.ProviderPayload,
 	})
 }
