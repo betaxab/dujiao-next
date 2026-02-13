@@ -16,6 +16,7 @@ import (
 	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/payment/alipay"
 	"github.com/dujiao-next/internal/payment/epay"
+	"github.com/dujiao-next/internal/payment/epusdt"
 	"github.com/dujiao-next/internal/payment/paypal"
 	"github.com/dujiao-next/internal/payment/stripe"
 	"github.com/dujiao-next/internal/payment/wechatpay"
@@ -1247,6 +1248,61 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			return ErrPaymentUpdateFailed
 		}
 		return nil
+	case constants.PaymentProviderEpusdt:
+		cfg, err := epusdt.ParseConfig(channel.ConfigJSON)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
+		}
+		// 如果配置中没有指定 trade_type，根据 channel_type 自动设置
+		if strings.TrimSpace(cfg.TradeType) == "" {
+			cfg.TradeType = epusdt.ResolveTradeType(channel.ChannelType)
+		}
+		if err := epusdt.ValidateConfig(cfg); err != nil {
+			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
+		}
+		notifyURL := strings.TrimSpace(cfg.NotifyURL)
+		returnURL := strings.TrimSpace(cfg.ReturnURL)
+		if notifyURL == "" || returnURL == "" {
+			return fmt.Errorf("%w: notify_url/return_url is required", ErrPaymentChannelConfigInvalid)
+		}
+		ctx := input.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		subject := buildOrderSubject(order)
+		result, err := epusdt.CreatePayment(ctx, cfg, epusdt.CreateInput{
+			OrderNo:   order.OrderNo,
+			PaymentID: payment.ID,
+			Amount:    payment.Amount.String(),
+			Name:      subject,
+			NotifyURL: notifyURL,
+			ReturnURL: returnURL,
+		})
+		if err != nil {
+			switch {
+			case errors.Is(err, epusdt.ErrConfigInvalid):
+				return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
+			case errors.Is(err, epusdt.ErrRequestFailed):
+				return ErrPaymentGatewayRequestFailed
+			case errors.Is(err, epusdt.ErrResponseInvalid):
+				return ErrPaymentGatewayResponseInvalid
+			default:
+				return ErrPaymentGatewayRequestFailed
+			}
+		}
+		payment.PayURL = result.PaymentURL
+		payment.QRCode = result.PaymentURL
+		if result.TradeID != "" {
+			payment.ProviderRef = result.TradeID
+		}
+		if result.Raw != nil {
+			payment.ProviderPayload = models.JSON(result.Raw)
+		}
+		payment.UpdatedAt = time.Now()
+		if err := s.paymentRepo.Update(payment); err != nil {
+			return ErrPaymentUpdateFailed
+		}
+		return nil
 	case constants.PaymentProviderOfficial:
 		channelType = strings.ToLower(strings.TrimSpace(channel.ChannelType))
 		switch channelType {
@@ -1453,6 +1509,22 @@ func (s *PaymentService) ValidateChannel(channel *models.PaymentChannel) error {
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
 		if err := epay.ValidateConfig(cfg); err != nil {
+			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
+		}
+		return nil
+	case constants.PaymentProviderEpusdt:
+		if !epusdt.IsSupportedChannelType(channel.ChannelType) {
+			return fmt.Errorf("%w: unsupported channel_type %s", ErrPaymentChannelConfigInvalid, channel.ChannelType)
+		}
+		if strings.ToLower(strings.TrimSpace(channel.InteractionMode)) != constants.PaymentInteractionRedirect &&
+			strings.ToLower(strings.TrimSpace(channel.InteractionMode)) != constants.PaymentInteractionQR {
+			return ErrPaymentChannelConfigInvalid
+		}
+		cfg, err := epusdt.ParseConfig(channel.ConfigJSON)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
+		}
+		if err := epusdt.ValidateConfig(cfg); err != nil {
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
 		return nil

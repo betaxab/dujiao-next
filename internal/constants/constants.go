@@ -32,16 +32,21 @@ const (
 const (
 	PaymentProviderOfficial = "official"
 	PaymentProviderEpay     = "epay"
+	PaymentProviderEpusdt   = "epusdt"
 )
 
 // 支付渠道类型常量
 const (
-	PaymentChannelTypeWechat = "wechat"
-	PaymentChannelTypeWxpay  = "wxpay"
-	PaymentChannelTypeAlipay = "alipay"
-	PaymentChannelTypePaypal = "paypal"
-	PaymentChannelTypeStripe = "stripe"
-	PaymentChannelTypeQqpay  = "qqpay"
+	PaymentChannelTypeWechat   = "wechat"
+	PaymentChannelTypeWxpay    = "wxpay"
+	PaymentChannelTypeAlipay   = "alipay"
+	PaymentChannelTypePaypal   = "paypal"
+	PaymentChannelTypeStripe   = "stripe"
+	PaymentChannelTypeQqpay    = "qqpay"
+	PaymentChannelTypeUsdt     = "usdt"
+	PaymentChannelTypeUsdtTrc20 = "usdt-trc20"
+	PaymentChannelTypeUsdcTrc20 = "usdc-trc20"
+	PaymentChannelTypeTrx      = "trx"
 )
 
 // 支付交互方式常量
