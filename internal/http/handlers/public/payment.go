@@ -90,7 +90,6 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 		"pay_url":          result.Payment.PayURL,
 		"qr_code":          result.Payment.QRCode,
 		"expires_at":       result.Payment.ExpiredAt,
-		"provider_payload": result.Payment.ProviderPayload,
 	})
 }
 
@@ -192,7 +191,6 @@ func (h *Handler) GetLatestPayment(c *gin.Context) {
 		"pay_url":          payment.PayURL,
 		"qr_code":          payment.QRCode,
 		"expires_at":       payment.ExpiredAt,
-		"provider_payload": payment.ProviderPayload,
 	})
 }
 
@@ -984,15 +982,10 @@ func (h *Handler) HandleEpusdtCallback(c *gin.Context) bool {
 
 	now := time.Now()
 	
-	// 将原始回调数据保存为 payload（参考易支付的实现）
-	payload := make(map[string]interface{})
-	payload["trade_id"] = data.TradeID
-	payload["order_id"] = data.OrderID
-	payload["amount"] = data.GetAmount()
-	payload["actual_amount"] = data.GetActualAmount()
-	payload["token"] = data.Token
-	payload["block_transaction_id"] = data.BlockTransactionID
-	payload["status"] = data.Status
+	// 将回调数据结构体序列化为 JSON 保存
+	payloadBytes, _ := json.Marshal(data)
+	var payload models.JSON
+	_ = json.Unmarshal(payloadBytes, &payload)
 	
 	input := service.PaymentCallbackInput{
 		PaymentID:   payment.ID,

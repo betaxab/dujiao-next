@@ -1261,7 +1261,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
 		notifyURL := strings.TrimSpace(cfg.NotifyURL)
-		returnURL := appendURLQuery(cfg.ReturnURL, buildOrderReturnQuery(order, "epusdt_return", ""))
+		returnURL := strings.TrimSpace(cfg.ReturnURL)
 		if notifyURL == "" || returnURL == "" {
 			return fmt.Errorf("%w: notify_url/return_url is required", ErrPaymentChannelConfigInvalid)
 		}
@@ -1291,12 +1291,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			}
 		}
 		payment.PayURL = result.PaymentURL
-		// BEpusdt: QR 模式使用 token（收款地址），redirect 模式使用 payment_url
-		if channel.InteractionMode == "qr" && result.Token != "" {
-			payment.QRCode = result.Token // 收款地址作为二维码内容
-		} else {
-			payment.QRCode = result.PaymentURL // 收银台地址作为二维码内容
-		}
+		payment.QRCode = result.PaymentURL
 		if result.TradeID != "" {
 			payment.ProviderRef = result.TradeID
 		}
