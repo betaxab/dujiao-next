@@ -983,6 +983,17 @@ func (h *Handler) HandleEpusdtCallback(c *gin.Context) bool {
 	}
 
 	now := time.Now()
+	
+	// 将原始回调数据保存为 payload（参考易支付的实现）
+	payload := make(map[string]interface{})
+	payload["trade_id"] = data.TradeID
+	payload["order_id"] = data.OrderID
+	payload["amount"] = data.GetAmount()
+	payload["actual_amount"] = data.GetActualAmount()
+	payload["token"] = data.Token
+	payload["block_transaction_id"] = data.BlockTransactionID
+	payload["status"] = data.Status
+	
 	input := service.PaymentCallbackInput{
 		PaymentID:   payment.ID,
 		OrderNo:     data.OrderID,
@@ -991,15 +1002,7 @@ func (h *Handler) HandleEpusdtCallback(c *gin.Context) bool {
 		ProviderRef: data.TradeID,
 		Amount:      amount,
 		PaidAt:      &now,
-		Payload: models.JSON{
-			"trade_id":             data.TradeID,
-			"order_id":             data.OrderID,
-			"amount":               data.GetAmount(),
-			"actual_amount":        data.GetActualAmount(),
-			"token":                data.Token,
-			"block_transaction_id": data.BlockTransactionID,
-			"status":               data.Status,
-		},
+		Payload:     models.JSON(payload),
 	}
 
 	// 处理回调
