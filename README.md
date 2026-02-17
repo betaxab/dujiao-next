@@ -28,4 +28,4 @@ The default health check endpoint is:
 
 ## Online Documentation
 
-- https://dujiaoka.com
+- https://dujiao-next.com
