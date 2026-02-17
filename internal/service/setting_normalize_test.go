@@ -89,6 +89,33 @@ func TestUpdateSiteSettingNormalized(t *testing.T) {
 				},
 			},
 		},
+		"scripts": []interface{}{
+			map[string]interface{}{
+				"name":     "  Google Analytics  ",
+				"enabled":  "true",
+				"position": "head",
+				"code":     "  window.dataLayer = window.dataLayer || [];  ",
+			},
+			map[string]interface{}{
+				"name":     "Footer Tracker",
+				"enabled":  1,
+				"position": "body_end",
+				"code":     "window.__footerTracker = true;",
+			},
+			map[string]interface{}{
+				"name":     "Fallback Position",
+				"enabled":  false,
+				"position": "invalid",
+				"code":     "console.log('fallback');",
+			},
+			map[string]interface{}{
+				"name":     "Skip Empty",
+				"enabled":  true,
+				"position": "head",
+				"code":     "   ",
+			},
+			"invalid",
+		},
 		"languages": []interface{}{" zh-CN ", "en-US", "", "en-US"},
 	})
 	if err != nil {
@@ -207,6 +234,35 @@ func TestUpdateSiteSettingNormalized(t *testing.T) {
 	if len(languages) != 2 || languages[0] != "zh-CN" || languages[1] != "en-US" {
 		t.Fatalf("unexpected languages: %+v", languages)
 	}
+
+	scripts, ok := result["scripts"].([]interface{})
+	if !ok {
+		t.Fatalf("invalid scripts payload type: %T", result["scripts"])
+	}
+	if len(scripts) != 3 {
+		t.Fatalf("unexpected scripts size: %d", len(scripts))
+	}
+	firstScript, ok := scripts[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("invalid scripts[0] payload type: %T", scripts[0])
+	}
+	if firstScript["name"] != "Google Analytics" || firstScript["enabled"] != true || firstScript["position"] != "head" || firstScript["code"] != "window.dataLayer = window.dataLayer || [];" {
+		t.Fatalf("unexpected scripts[0]: %+v", firstScript)
+	}
+	secondScript, ok := scripts[1].(map[string]interface{})
+	if !ok {
+		t.Fatalf("invalid scripts[1] payload type: %T", scripts[1])
+	}
+	if secondScript["position"] != "body_end" || secondScript["enabled"] != true {
+		t.Fatalf("unexpected scripts[1]: %+v", secondScript)
+	}
+	thirdScript, ok := scripts[2].(map[string]interface{})
+	if !ok {
+		t.Fatalf("invalid scripts[2] payload type: %T", scripts[2])
+	}
+	if thirdScript["position"] != "head" || thirdScript["enabled"] != false {
+		t.Fatalf("unexpected scripts[2]: %+v", thirdScript)
+	}
 }
 
 func TestUpdateSiteSettingNormalizedDefaultAbout(t *testing.T) {
@@ -224,6 +280,13 @@ func TestUpdateSiteSettingNormalizedDefaultAbout(t *testing.T) {
 	}
 	if brand["site_name"] != "" {
 		t.Fatalf("unexpected default brand payload: %+v", brand)
+	}
+	scripts, ok := result["scripts"].([]interface{})
+	if !ok {
+		t.Fatalf("invalid scripts payload type: %T", result["scripts"])
+	}
+	if len(scripts) != 0 {
+		t.Fatalf("unexpected default scripts payload: %+v", scripts)
 	}
 
 	about, ok := result["about"].(map[string]interface{})
@@ -253,5 +316,35 @@ func TestUpdateSiteSettingNormalizedDefaultAbout(t *testing.T) {
 	}
 	if len(serviceItems) != 0 {
 		t.Fatalf("unexpected default about.services.items size: %d", len(serviceItems))
+	}
+}
+
+func TestUpdateSiteSettingNormalizedScriptsLimit(t *testing.T) {
+	repo := newMockSettingRepo()
+	svc := NewSettingService(repo)
+
+	scripts := make([]interface{}, 0, 25)
+	for i := 0; i < 25; i++ {
+		scripts = append(scripts, map[string]interface{}{
+			"name":     "script",
+			"enabled":  true,
+			"position": "head",
+			"code":     "console.log('ok');",
+		})
+	}
+
+	result, err := svc.Update(constants.SettingKeySiteConfig, map[string]interface{}{
+		"scripts": scripts,
+	})
+	if err != nil {
+		t.Fatalf("update site config failed: %v", err)
+	}
+
+	normalizedScripts, ok := result["scripts"].([]interface{})
+	if !ok {
+		t.Fatalf("invalid scripts payload type: %T", result["scripts"])
+	}
+	if len(normalizedScripts) != settingSiteScriptsMaxCount {
+		t.Fatalf("unexpected scripts size: %d", len(normalizedScripts))
 	}
 }

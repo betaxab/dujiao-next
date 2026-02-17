@@ -701,6 +701,7 @@ func main() {
 			"telegram": "https://t.me/dujiaostudio",
 			"whatsapp": "https://wa.me/1234567890",
 		},
+		"scripts": make([]interface{}, 0),
 	}
 
 	var setting models.Setting

@@ -9,6 +9,12 @@ import (
 
 var settingSupportedLanguages = []string{"zh-CN", "zh-TW", "en-US"}
 
+const (
+	settingSiteScriptsMaxCount       = 20
+	settingSiteScriptNameMaxRuneSize = 120
+	settingSiteScriptCodeMaxRuneSize = 20000
+)
+
 // normalizeSettingValueByKey 按设置键执行归一化，避免非法值入库。
 func normalizeSettingValueByKey(key string, value map[string]interface{}) models.JSON {
 	switch key {
@@ -48,7 +54,7 @@ func normalizeOrderSetting(value map[string]interface{}) models.JSON {
 
 // normalizeSiteSetting 归一化站点配置结构。
 func normalizeSiteSetting(value map[string]interface{}) models.JSON {
-	normalized := make(models.JSON, len(value)+6)
+	normalized := make(models.JSON, len(value)+7)
 	for key, raw := range value {
 		normalized[key] = raw
 	}
@@ -58,12 +64,51 @@ func normalizeSiteSetting(value map[string]interface{}) models.JSON {
 	normalized["seo"] = normalizeSiteLocalizedBlock(value["seo"], []string{"title", "keywords", "description"})
 	normalized["legal"] = normalizeSiteLocalizedBlock(value["legal"], []string{"terms", "privacy"})
 	normalized["about"] = normalizeSiteAbout(value["about"])
+	normalized["scripts"] = normalizeSiteScripts(value["scripts"])
 
 	if raw, ok := value["languages"]; ok {
 		normalized["languages"] = normalizeSiteLanguages(raw)
 	}
 
 	return normalized
+}
+
+func normalizeSiteScripts(raw interface{}) []interface{} {
+	listRaw, ok := raw.([]interface{})
+	if !ok {
+		return make([]interface{}, 0)
+	}
+
+	result := make([]interface{}, 0, len(listRaw))
+	for _, itemRaw := range listRaw {
+		itemMap, ok := itemRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		code := normalizeSettingTextWithRuneLimit(itemMap["code"], settingSiteScriptCodeMaxRuneSize)
+		if code == "" {
+			continue
+		}
+
+		position := normalizeSettingText(itemMap["position"])
+		if position != "head" && position != "body_end" {
+			position = "head"
+		}
+
+		result = append(result, map[string]interface{}{
+			"name":     normalizeSettingTextWithRuneLimit(itemMap["name"], settingSiteScriptNameMaxRuneSize),
+			"enabled":  parseSettingBool(itemMap["enabled"]),
+			"position": position,
+			"code":     code,
+		})
+
+		if len(result) >= settingSiteScriptsMaxCount {
+			break
+		}
+	}
+
+	return result
 }
 
 func normalizeSiteContact(raw interface{}) map[string]interface{} {
@@ -238,4 +283,35 @@ func normalizeSettingText(raw interface{}) string {
 		return ""
 	}
 	return strings.TrimSpace(text)
+}
+
+func normalizeSettingTextWithRuneLimit(raw interface{}, maxRuneCount int) string {
+	text := normalizeSettingText(raw)
+	if text == "" || maxRuneCount <= 0 {
+		return text
+	}
+
+	runes := []rune(text)
+	if len(runes) <= maxRuneCount {
+		return text
+	}
+	return string(runes[:maxRuneCount])
+}
+
+func parseSettingBool(raw interface{}) bool {
+	switch value := raw.(type) {
+	case bool:
+		return value
+	case int:
+		return value != 0
+	case int64:
+		return value != 0
+	case float64:
+		return value != 0
+	case string:
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on"
+	default:
+		return false
+	}
 }

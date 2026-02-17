@@ -46,6 +46,7 @@ func (h *Handler) GetConfig(c *gin.Context) {
 			"telegram": "https://t.me/dujiaostudio",
 			"whatsapp": "https://wa.me/1234567890",
 		},
+		"scripts": make([]interface{}, 0),
 	}
 
 	var cached map[string]interface{}
