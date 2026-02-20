@@ -43,10 +43,8 @@ func (r *GormPostRepository) List(filter PostListFilter) ([]models.Post, int64, 
 	}
 	if search := strings.TrimSpace(filter.Search); search != "" {
 		like := "%" + search + "%"
-		query = query.Where(
-			"slug LIKE ? OR json_extract(title_json, '$.zh-CN') LIKE ? OR json_extract(title_json, '$.zh-TW') LIKE ? OR json_extract(title_json, '$.en-US') LIKE ?",
-			like, like, like, like,
-		)
+		condition, argCount := buildLocalizedLikeCondition(r.db, []string{"slug"}, []string{"title_json"})
+		query = query.Where(condition, repeatLikeArgs(like, argCount)...)
 	}
 
 	var total int64

@@ -59,10 +59,8 @@ func (r *GormProductRepository) List(filter ProductListFilter) ([]models.Product
 	}
 	if search := strings.TrimSpace(filter.Search); search != "" {
 		like := "%" + search + "%"
-		query = query.Where(
-			"slug LIKE ? OR json_extract(title_json, '$.zh-CN') LIKE ? OR json_extract(title_json, '$.zh-TW') LIKE ? OR json_extract(title_json, '$.en-US') LIKE ? OR json_extract(description_json, '$.zh-CN') LIKE ? OR json_extract(description_json, '$.zh-TW') LIKE ? OR json_extract(description_json, '$.en-US') LIKE ?",
-			like, like, like, like, like, like, like,
-		)
+		condition, argCount := buildLocalizedLikeCondition(r.db, []string{"slug"}, []string{"title_json", "description_json"})
+		query = query.Where(condition, repeatLikeArgs(like, argCount)...)
 	}
 
 	manualStockStatus := strings.ToLower(strings.TrimSpace(filter.ManualStockStatus))

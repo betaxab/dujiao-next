@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/dujiao-next/internal/constants"
@@ -186,10 +187,11 @@ func (r *GormDashboardRepository) GetOrderTrends(startAt, endAt time.Time) ([]Da
 	}
 
 	var totals []totalRow
+	dayExpr := "CAST(date(created_at) AS TEXT)"
 	if err := r.db.Model(&models.Order{}).
-		Select("date(created_at) as day, COUNT(*) as total").
+		Select(fmt.Sprintf("%s as day, COUNT(*) as total", dayExpr)).
 		Where("parent_id IS NULL AND created_at >= ? AND created_at < ?", startAt, endAt).
-		Group("date(created_at)").
+		Group(dayExpr).
 		Order("day asc").
 		Scan(&totals).Error; err != nil {
 		return nil, err
@@ -197,9 +199,9 @@ func (r *GormDashboardRepository) GetOrderTrends(startAt, endAt time.Time) ([]Da
 
 	var paids []paidRow
 	if err := r.db.Model(&models.Order{}).
-		Select("date(created_at) as day, COUNT(*) as paid").
+		Select(fmt.Sprintf("%s as day, COUNT(*) as paid", dayExpr)).
 		Where("parent_id IS NULL AND created_at >= ? AND created_at < ? AND status IN ?", startAt, endAt, paidOrderStatuses()).
-		Group("date(created_at)").
+		Group(dayExpr).
 		Order("day asc").
 		Scan(&paids).Error; err != nil {
 		return nil, err
@@ -232,11 +234,13 @@ func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]
 		Total float64
 	}
 
+	dayExpr := "CAST(date(created_at) AS TEXT)"
+
 	var successRows []countRow
 	if err := r.db.Model(&models.Payment{}).
-		Select("date(created_at) as day, COUNT(*) as total").
+		Select(fmt.Sprintf("%s as day, COUNT(*) as total", dayExpr)).
 		Where("created_at >= ? AND created_at < ? AND status = ?", startAt, endAt, constants.PaymentStatusSuccess).
-		Group("date(created_at)").
+		Group(dayExpr).
 		Order("day asc").
 		Scan(&successRows).Error; err != nil {
 		return nil, err
@@ -244,9 +248,9 @@ func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]
 
 	var failedRows []countRow
 	if err := r.db.Model(&models.Payment{}).
-		Select("date(created_at) as day, COUNT(*) as total").
+		Select(fmt.Sprintf("%s as day, COUNT(*) as total", dayExpr)).
 		Where("created_at >= ? AND created_at < ? AND status = ?", startAt, endAt, constants.PaymentStatusFailed).
-		Group("date(created_at)").
+		Group(dayExpr).
 		Order("day asc").
 		Scan(&failedRows).Error; err != nil {
 		return nil, err
@@ -254,9 +258,9 @@ func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]
 
 	var amountRows []amountRow
 	if err := r.db.Model(&models.Payment{}).
-		Select("date(created_at) as day, COALESCE(SUM(amount), 0) as total").
+		Select(fmt.Sprintf("%s as day, COALESCE(SUM(amount), 0) as total", dayExpr)).
 		Where("created_at >= ? AND created_at < ? AND status = ?", startAt, endAt, constants.PaymentStatusSuccess).
-		Group("date(created_at)").
+		Group(dayExpr).
 		Order("day asc").
 		Scan(&amountRows).Error; err != nil {
 		return nil, err
@@ -389,19 +393,15 @@ func (r *GormDashboardRepository) GetTopProducts(startAt, endAt time.Time, limit
 		limit = 5
 	}
 	rows := make([]DashboardProductRankingRow, 0)
+	titleExpr := localizedJSONCoalesceExpr(r.db, "order_items.title_json")
 	if err := r.db.Model(&models.OrderItem{}).
-		Select(`
+		Select(fmt.Sprintf(`
 			order_items.product_id as product_id,
-			COALESCE(
-				json_extract(order_items.title_json, '$.zh-CN'),
-				json_extract(order_items.title_json, '$.zh-TW'),
-				json_extract(order_items.title_json, '$.en-US'),
-				''
-			) as title,
+			%s as title,
 			COUNT(DISTINCT order_items.order_id) as paid_orders,
 			COALESCE(SUM(order_items.quantity), 0) as quantity,
 			COALESCE(SUM(order_items.total_price - order_items.coupon_discount - order_items.promotion_discount), 0) as paid_amount
-		`).
+		`, titleExpr)).
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Where("orders.created_at >= ? AND orders.created_at < ? AND orders.status IN ?", startAt, endAt, paidOrderStatuses()).
 		Group("order_items.product_id, title").
