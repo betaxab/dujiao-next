@@ -150,7 +150,7 @@ type WebhookCallbackInput struct {
 
 // CreatePayment 创建支付单
 func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePaymentResult, error) {
-	if input.OrderID == 0 || input.ChannelID == 0 {
+	if input.OrderID == 0 {
 		return nil, ErrPaymentInvalid
 	}
 
@@ -159,29 +159,15 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 		"channel_id", input.ChannelID,
 	)
 
-	channel, err := s.channelRepo.GetByID(input.ChannelID)
-	if err != nil {
-		return nil, err
-	}
-	if channel == nil {
-		return nil, ErrPaymentChannelNotFound
-	}
-	if !channel.IsActive {
-		return nil, ErrPaymentChannelInactive
-	}
-
-	feeRate := channel.FeeRate.Decimal.Round(2)
-	if feeRate.LessThan(decimal.Zero) || feeRate.GreaterThan(decimal.NewFromInt(100)) {
-		return nil, ErrPaymentChannelConfigInvalid
-	}
-
 	var payment *models.Payment
 	var order *models.Order
+	var channel *models.PaymentChannel
+	feeRate := decimal.Zero
 	reusedPending := false
 	orderPaidByWallet := false
 	now := time.Now()
 
-	err = models.DB.Transaction(func(tx *gorm.DB) error {
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
 		var lockedOrder models.Order
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Preload("Items").
@@ -204,15 +190,36 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 		}
 
 		paymentRepo := s.paymentRepo.WithTx(tx)
-		existing, err := paymentRepo.GetLatestPendingByOrderChannel(lockedOrder.ID, channel.ID, time.Now())
-		if err != nil {
-			return ErrPaymentCreateFailed
-		}
-		if existing != nil && hasProviderResult(existing) {
-			reusedPending = true
-			payment = existing
-			order = &lockedOrder
-			return nil
+		if input.ChannelID != 0 {
+			if channel == nil {
+				resolvedChannel, err := s.channelRepo.GetByID(input.ChannelID)
+				if err != nil {
+					return err
+				}
+				if resolvedChannel == nil {
+					return ErrPaymentChannelNotFound
+				}
+				if !resolvedChannel.IsActive {
+					return ErrPaymentChannelInactive
+				}
+				resolvedFeeRate := resolvedChannel.FeeRate.Decimal.Round(2)
+				if resolvedFeeRate.LessThan(decimal.Zero) || resolvedFeeRate.GreaterThan(decimal.NewFromInt(100)) {
+					return ErrPaymentChannelConfigInvalid
+				}
+				channel = resolvedChannel
+				feeRate = resolvedFeeRate
+			}
+
+			existing, err := paymentRepo.GetLatestPendingByOrderChannel(lockedOrder.ID, channel.ID, time.Now())
+			if err != nil {
+				return ErrPaymentCreateFailed
+			}
+			if existing != nil && hasProviderResult(existing) {
+				reusedPending = true
+				payment = existing
+				order = &lockedOrder
+				return nil
+			}
 		}
 
 		if s.walletSvc != nil {
@@ -235,6 +242,9 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 			orderPaidByWallet = true
 			order = &lockedOrder
 			return nil
+		}
+		if channel == nil {
+			return ErrPaymentInvalid
 		}
 
 		feeAmount := decimal.Zero

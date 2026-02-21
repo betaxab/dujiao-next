@@ -26,7 +26,7 @@ import (
 // CreatePaymentRequest 创建支付请求
 type CreatePaymentRequest struct {
 	OrderID    uint `json:"order_id" binding:"required"`
-	ChannelID  uint `json:"channel_id" binding:"required"`
+	ChannelID  uint `json:"channel_id"`
 	UseBalance bool `json:"use_balance"`
 }
 
