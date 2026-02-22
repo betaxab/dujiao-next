@@ -214,9 +214,10 @@ type PasswordPolicyConfig struct {
 func Load() *Config {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")   // 从当前目录查找
-	viper.AddConfigPath("./")  // 备用路径
-	viper.AddConfigPath("../") // 如果从 cmd/server 运行
+	viper.AddConfigPath(".")     // 从当前目录查找
+	viper.AddConfigPath("./")    // 备用路径
+	viper.AddConfigPath("../")   // 如果从 cmd/server 运行
+	viper.AddConfigPath("./etc") // etc 文件夹
 
 	// 设置默认值（可选）
 	viper.SetDefault("server.host", "0.0.0.0")
