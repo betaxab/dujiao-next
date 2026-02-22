@@ -16,6 +16,7 @@ type PaymentChannelRepository interface {
 	GetByID(id uint) (*models.PaymentChannel, error)
 	ListByIDs(ids []uint) ([]models.PaymentChannel, error)
 	List(filter PaymentChannelListFilter) ([]models.PaymentChannel, int64, error)
+	WithTx(tx *gorm.DB) *GormPaymentChannelRepository
 }
 
 // GormPaymentChannelRepository GORM 实现
@@ -26,6 +27,14 @@ type GormPaymentChannelRepository struct {
 // NewPaymentChannelRepository 创建支付渠道仓库
 func NewPaymentChannelRepository(db *gorm.DB) *GormPaymentChannelRepository {
 	return &GormPaymentChannelRepository{db: db}
+}
+
+// WithTx 绑定事务
+func (r *GormPaymentChannelRepository) WithTx(tx *gorm.DB) *GormPaymentChannelRepository {
+	if tx == nil {
+		return r
+	}
+	return &GormPaymentChannelRepository{db: tx}
 }
 
 // Create 创建支付渠道

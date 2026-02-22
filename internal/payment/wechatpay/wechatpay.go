@@ -35,7 +35,10 @@ var (
 	ErrSignatureInvalid = errors.New("wechatpay signature invalid")
 )
 
-const defaultBaseURL = "https://api.mch.weixin.qq.com"
+const (
+	defaultBaseURL = "https://api.mch.weixin.qq.com"
+	defaultTimeout = 15 * time.Second
+)
 
 // Config 微信官方支付配置。
 type Config struct {
@@ -157,9 +160,8 @@ func CreatePayment(ctx context.Context, cfg *Config, input CreateInput, interact
 		return nil, err
 	}
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx, cancel := withDefaultTimeout(ctx)
+	defer cancel()
 	client, err := createAPIClient(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -248,9 +250,8 @@ func QueryOrderByOutTradeNo(ctx context.Context, cfg *Config, orderNo string) (*
 	if orderNo == "" {
 		return nil, fmt.Errorf("%w: order no is required", ErrConfigInvalid)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx, cancel := withDefaultTimeout(ctx)
+	defer cancel()
 	client, err := createAPIClient(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -274,9 +275,8 @@ func VerifyAndDecodeWebhook(ctx context.Context, cfg *Config, headers map[string
 	if len(body) == 0 {
 		return nil, fmt.Errorf("%w: empty webhook body", ErrResponseInvalid)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx, cancel := withDefaultTimeout(ctx)
+	defer cancel()
 
 	privateKey, err := parsePrivateKey(cfg.MerchantPrivateKey)
 	if err != nil {
@@ -765,4 +765,14 @@ func (c *Config) normalize() {
 	if c.BaseURL == "" {
 		c.BaseURL = defaultBaseURL
 	}
+}
+
+func withDefaultTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, defaultTimeout)
 }

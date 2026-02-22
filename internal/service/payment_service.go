@@ -190,9 +190,11 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 		}
 
 		paymentRepo := s.paymentRepo.WithTx(tx)
+		channelRepo := s.channelRepo.WithTx(tx)
 		if input.ChannelID != 0 {
 			if channel == nil {
-				resolvedChannel, err := s.channelRepo.GetByID(input.ChannelID)
+				// 事务内必须使用 tx 绑定仓储，避免在单连接池下发生自锁等待。
+				resolvedChannel, err := channelRepo.GetByID(input.ChannelID)
 				if err != nil {
 					return err
 				}
