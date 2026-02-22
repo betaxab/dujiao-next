@@ -24,6 +24,7 @@ func NewProductService(repo repository.ProductRepository) *ProductService {
 type CreateProductInput struct {
 	CategoryID           uint
 	Slug                 string
+	SeoMetaJSON          map[string]interface{}
 	TitleJSON            map[string]interface{}
 	DescriptionJSON      map[string]interface{}
 	ContentJSON          map[string]interface{}
@@ -129,6 +130,7 @@ func (s *ProductService) Create(input CreateProductInput) (*models.Product, erro
 	product := models.Product{
 		CategoryID:           input.CategoryID,
 		Slug:                 input.Slug,
+		SeoMetaJSON:          models.JSON(input.SeoMetaJSON),
 		TitleJSON:            models.JSON(input.TitleJSON),
 		DescriptionJSON:      models.JSON(input.DescriptionJSON),
 		ContentJSON:          models.JSON(input.ContentJSON),
@@ -184,6 +186,7 @@ func (s *ProductService) Update(id string, input CreateProductInput) (*models.Pr
 
 	product.CategoryID = input.CategoryID
 	product.Slug = input.Slug
+	product.SeoMetaJSON = models.JSON(input.SeoMetaJSON)
 	product.TitleJSON = models.JSON(input.TitleJSON)
 	product.DescriptionJSON = models.JSON(input.DescriptionJSON)
 	product.ContentJSON = models.JSON(input.ContentJSON)

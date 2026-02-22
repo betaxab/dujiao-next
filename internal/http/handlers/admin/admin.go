@@ -209,6 +209,7 @@ func (h *Handler) UpdateAdminPassword(c *gin.Context) {
 type CreateProductRequest struct {
 	CategoryID       uint                   `json:"category_id" binding:"required"`
 	Slug             string                 `json:"slug" binding:"required"`
+	SeoMetaJSON      map[string]interface{} `json:"seo_meta"`
 	TitleJSON        map[string]interface{} `json:"title" binding:"required"`
 	DescriptionJSON  map[string]interface{} `json:"description"`
 	ContentJSON      map[string]interface{} `json:"content"`
@@ -235,6 +236,7 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 	product, err := h.ProductService.Create(service.CreateProductInput{
 		CategoryID:           req.CategoryID,
 		Slug:                 req.Slug,
+		SeoMetaJSON:          req.SeoMetaJSON,
 		TitleJSON:            req.TitleJSON,
 		DescriptionJSON:      req.DescriptionJSON,
 		ContentJSON:          req.ContentJSON,
@@ -294,6 +296,7 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 	product, err := h.ProductService.Update(id, service.CreateProductInput{
 		CategoryID:           req.CategoryID,
 		Slug:                 req.Slug,
+		SeoMetaJSON:          req.SeoMetaJSON,
 		TitleJSON:            req.TitleJSON,
 		DescriptionJSON:      req.DescriptionJSON,
 		ContentJSON:          req.ContentJSON,

@@ -11,6 +11,7 @@ type Product struct {
 	ID                   uint           `gorm:"primarykey" json:"id"`                                               // 主键
 	CategoryID           uint           `gorm:"not null;index" json:"category_id"`                                  // 分类ID
 	Slug                 string         `gorm:"uniqueIndex;not null" json:"slug"`                                   // 唯一标识
+	SeoMetaJSON          JSON           `gorm:"type:json" json:"seo_meta"`                                          // SEO 元数据
 	TitleJSON            JSON           `gorm:"type:json;not null" json:"title"`                                    // 多语言标题
 	DescriptionJSON      JSON           `gorm:"type:json" json:"description"`                                       // 多语言描述
 	ContentJSON          JSON           `gorm:"type:json" json:"content"`                                           // 多语言详情（Markdown）
