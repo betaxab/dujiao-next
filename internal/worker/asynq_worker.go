@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dujiao-next/internal/logger"
+	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/provider"
 	"github.com/dujiao-next/internal/queue"
 	"github.com/dujiao-next/internal/service"
@@ -93,26 +94,7 @@ func (c *Consumer) handleOrderStatusEmail(_ context.Context, task *asynq.Task) e
 	if status == "" {
 		status = order.Status
 	}
-	var payloadText string
-	if order.Fulfillment != nil {
-		payloadText = strings.TrimSpace(order.Fulfillment.Payload)
-	}
-	if payloadText == "" && len(order.Children) > 0 {
-		parts := make([]string, 0)
-		for _, child := range order.Children {
-			if child.Fulfillment == nil {
-				continue
-			}
-			content := strings.TrimSpace(child.Fulfillment.Payload)
-			if content == "" {
-				continue
-			}
-			parts = append(parts, fmt.Sprintf("[%s]\\n%s", child.OrderNo, content))
-		}
-		if len(parts) > 0 {
-			payloadText = strings.Join(parts, "\n\n")
-		}
-	}
+	payloadText := buildOrderFulfillmentEmailPayload(order)
 	input := service.OrderStatusEmailInput{
 		OrderNo:         order.OrderNo,
 		Status:          status,
@@ -215,4 +197,31 @@ func isTelegramPlaceholderReceiver(email string) bool {
 		return false
 	}
 	return strings.HasPrefix(normalized, "telegram_") && strings.HasSuffix(normalized, "@login.local")
+}
+
+func buildOrderFulfillmentEmailPayload(order *models.Order) string {
+	if order == nil {
+		return ""
+	}
+	if order.Fulfillment != nil {
+		payload := strings.TrimSpace(order.Fulfillment.Payload)
+		if payload != "" {
+			return payload
+		}
+	}
+	if len(order.Children) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(order.Children))
+	for _, child := range order.Children {
+		if child.Fulfillment == nil {
+			continue
+		}
+		content := strings.TrimSpace(child.Fulfillment.Payload)
+		if content == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("[%s]\n%s", strings.TrimSpace(child.OrderNo), content))
+	}
+	return strings.Join(parts, "\n\n")
 }
