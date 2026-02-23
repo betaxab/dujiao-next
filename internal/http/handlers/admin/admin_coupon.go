@@ -170,6 +170,15 @@ func (h *Handler) GetAdminCoupons(c *gin.Context) {
 		}
 		id = uint(parsed)
 	}
+	var scopeRefID uint
+	if rawScopeRefID := strings.TrimSpace(c.Query("scope_ref_id")); rawScopeRefID != "" {
+		parsed, err := strconv.ParseUint(rawScopeRefID, 10, 64)
+		if err != nil || parsed == 0 {
+			respondError(c, response.CodeBadRequest, "error.bad_request", err)
+			return
+		}
+		scopeRefID = uint(parsed)
+	}
 	var isActive *bool
 	if raw := c.Query("is_active"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
@@ -181,11 +190,12 @@ func (h *Handler) GetAdminCoupons(c *gin.Context) {
 	}
 
 	coupons, total, err := h.CouponAdminService.List(repository.CouponListFilter{
-		ID:       id,
-		Code:     code,
-		IsActive: isActive,
-		Page:     page,
-		PageSize: pageSize,
+		ID:         id,
+		Code:       code,
+		ScopeRefID: scopeRefID,
+		IsActive:   isActive,
+		Page:       page,
+		PageSize:   pageSize,
 	})
 	if err != nil {
 		respondError(c, response.CodeInternal, "error.coupon_fetch_failed", err)

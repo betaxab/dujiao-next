@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/dujiao-next/internal/models"
 
@@ -24,11 +25,12 @@ type CouponRepository interface {
 
 // CouponListFilter 优惠券列表筛选
 type CouponListFilter struct {
-	ID       uint
-	Code     string
-	IsActive *bool
-	Page     int
-	PageSize int
+	ID         uint
+	Code       string
+	ScopeRefID uint
+	IsActive   *bool
+	Page       int
+	PageSize   int
 }
 
 // GormCouponRepository GORM 实现
@@ -110,6 +112,20 @@ func (r *GormCouponRepository) List(filter CouponListFilter) ([]models.Coupon, i
 	}
 	if filter.Code != "" {
 		query = query.Where("code = ?", filter.Code)
+	}
+	if filter.ScopeRefID > 0 {
+		// scope_ref_ids 存储格式为 JSON 数组（例如 [1,2,3]），按边界匹配避免误命中（如 1 命中 11）。
+		exact := fmt.Sprintf("[%d]", filter.ScopeRefID)
+		prefix := fmt.Sprintf("[%d,%%", filter.ScopeRefID)
+		middle := fmt.Sprintf("%%,%d,%%", filter.ScopeRefID)
+		suffix := fmt.Sprintf("%%,%d]", filter.ScopeRefID)
+		query = query.Where(
+			"(scope_ref_ids = ? OR scope_ref_ids LIKE ? OR scope_ref_ids LIKE ? OR scope_ref_ids LIKE ?)",
+			exact,
+			prefix,
+			middle,
+			suffix,
+		)
 	}
 	if filter.IsActive != nil {
 		query = query.Where("is_active = ?", *filter.IsActive)
