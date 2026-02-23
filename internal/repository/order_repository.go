@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/dujiao-next/internal/models"
 
@@ -12,6 +13,7 @@ import (
 type OrderRepository interface {
 	Create(order *models.Order, items []models.OrderItem) error
 	GetByID(id uint) (*models.Order, error)
+	ResolveReceiverEmailByOrderID(orderID uint) (string, error)
 	GetByIDAndUser(id uint, userID uint) (*models.Order, error)
 	GetByOrderNoAndUser(orderNo string, userID uint) (*models.Order, error)
 	GetByIDAndGuest(id uint, email, password string) (*models.Order, error)
@@ -73,6 +75,44 @@ func (r *GormOrderRepository) GetByID(id uint) (*models.Order, error) {
 		return nil, err
 	}
 	return &order, nil
+}
+
+// ResolveReceiverEmailByOrderID 根据订单 ID 解析状态通知的收件邮箱。
+func (r *GormOrderRepository) ResolveReceiverEmailByOrderID(orderID uint) (string, error) {
+	if orderID == 0 {
+		return "", nil
+	}
+
+	var orderRow struct {
+		UserID     uint
+		GuestEmail string
+	}
+	if err := r.db.Model(&models.Order{}).
+		Select("user_id", "guest_email").
+		Where("id = ?", orderID).
+		Take(&orderRow).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	if orderRow.UserID == 0 {
+		return strings.TrimSpace(orderRow.GuestEmail), nil
+	}
+
+	var userRow struct {
+		Email string
+	}
+	if err := r.db.Model(&models.User{}).
+		Select("email").
+		Where("id = ?", orderRow.UserID).
+		Take(&userRow).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(userRow.Email), nil
 }
 
 // GetByIDAndUser 获取用户订单详情

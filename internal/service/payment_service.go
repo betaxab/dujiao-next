@@ -1580,10 +1580,7 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *models.Order, log *zap.Sug
 	if s.queueClient == nil || order == nil {
 		return
 	}
-	if err := s.queueClient.EnqueueOrderStatusEmail(queue.OrderStatusEmailPayload{
-		OrderID: order.ID,
-		Status:  constants.OrderStatusPaid,
-	}); err != nil {
+	if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusPaid); err != nil {
 		log.Warnw("payment_enqueue_status_email_failed",
 			"order_id", order.ID,
 			"order_no", order.OrderNo,
