@@ -171,6 +171,9 @@ func (s *WalletService) AdminRefundToWallet(input AdminRefundToWalletInput) (*mo
 		if order.UserID == 0 {
 			return ErrWalletNotSupportedForGuest
 		}
+		if order.PaidAt == nil {
+			return ErrOrderStatusInvalid
+		}
 		if order.TotalAmount.Decimal.LessThanOrEqual(decimal.Zero) {
 			return ErrOrderStatusInvalid
 		}

@@ -184,8 +184,10 @@ func TestWalletServiceAdminRefundToWallet(t *testing.T) {
 	svc, db := setupWalletServiceTest(t)
 	createTestUser(t, db, 104)
 	order := createTestOrder(t, db, 104, "DJTESTREFUND001", decimal.NewFromInt(40))
+	paidAt := time.Now()
 	if err := db.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
-		"status": constants.OrderStatusPaid,
+		"status":  constants.OrderStatusPaid,
+		"paid_at": paidAt,
 	}).Error; err != nil {
 		t.Fatalf("update order status failed: %v", err)
 	}
@@ -212,5 +214,23 @@ func TestWalletServiceAdminRefundToWallet(t *testing.T) {
 	})
 	if !errors.Is(err, ErrWalletRefundExceeded) {
 		t.Fatalf("expected refund exceeded, got: %v", err)
+	}
+}
+
+func TestWalletServiceAdminRefundToWalletRejectUnpaidOrder(t *testing.T) {
+	svc, db := setupWalletServiceTest(t)
+	createTestUser(t, db, 105)
+	order := createTestOrder(t, db, 105, "DJTESTREFUND002", decimal.NewFromInt(40))
+	if err := db.Model(&models.Order{}).Where("id = ?", order.ID).Update("status", constants.OrderStatusCanceled).Error; err != nil {
+		t.Fatalf("update order status failed: %v", err)
+	}
+
+	_, _, err := svc.AdminRefundToWallet(AdminRefundToWalletInput{
+		OrderID: order.ID,
+		Amount:  models.NewMoneyFromDecimal(decimal.NewFromInt(15)),
+		Remark:  "未支付退款",
+	})
+	if !errors.Is(err, ErrOrderStatusInvalid) {
+		t.Fatalf("expected order status invalid, got: %v", err)
 	}
 }

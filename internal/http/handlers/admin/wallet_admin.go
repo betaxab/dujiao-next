@@ -179,6 +179,8 @@ func (h *Handler) AdminRefundOrderToWallet(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrOrderNotFound):
 			respondError(c, response.CodeNotFound, "error.order_not_found", nil)
+		case errors.Is(err, service.ErrOrderStatusInvalid):
+			respondError(c, response.CodeBadRequest, "error.order_status_invalid", nil)
 		case errors.Is(err, service.ErrWalletInvalidAmount), errors.Is(err, service.ErrWalletRefundExceeded), errors.Is(err, service.ErrWalletNotSupportedForGuest):
 			respondError(c, response.CodeBadRequest, "error.bad_request", nil)
 		default:
