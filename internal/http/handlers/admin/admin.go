@@ -521,6 +521,7 @@ func (h *Handler) DeletePost(c *gin.Context) {
 type CreateCategoryRequest struct {
 	Slug      string                 `json:"slug" binding:"required"`
 	NameJSON  map[string]interface{} `json:"name" binding:"required"`
+	Icon      string                 `json:"icon"`
 	SortOrder int                    `json:"sort_order"`
 }
 
@@ -535,6 +536,7 @@ func (h *Handler) CreateCategory(c *gin.Context) {
 	category, err := h.CategoryService.Create(service.CreateCategoryInput{
 		Slug:      req.Slug,
 		NameJSON:  req.NameJSON,
+		Icon:      req.Icon,
 		SortOrder: req.SortOrder,
 	})
 	if err != nil {
@@ -562,6 +564,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 	category, err := h.CategoryService.Update(id, service.CreateCategoryInput{
 		Slug:      req.Slug,
 		NameJSON:  req.NameJSON,
+		Icon:      req.Icon,
 		SortOrder: req.SortOrder,
 	})
 	if err != nil {

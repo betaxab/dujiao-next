@@ -22,11 +22,12 @@ import (
 )
 
 var allowedUploadScenes = map[string]struct{}{
-	"product": {},
-	"post":    {},
-	"banner":  {},
-	"editor":  {},
-	"common":  {},
+	"product":  {},
+	"post":     {},
+	"banner":   {},
+	"editor":   {},
+	"common":   {},
+	"category": {},
 }
 
 // UploadService 文件上传服务

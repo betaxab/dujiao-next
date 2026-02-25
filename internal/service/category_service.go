@@ -19,6 +19,7 @@ func NewCategoryService(repo repository.CategoryRepository) *CategoryService {
 type CreateCategoryInput struct {
 	Slug      string
 	NameJSON  map[string]interface{}
+	Icon      string
 	SortOrder int
 }
 
@@ -40,6 +41,7 @@ func (s *CategoryService) Create(input CreateCategoryInput) (*models.Category, e
 	category := models.Category{
 		Slug:      input.Slug,
 		NameJSON:  models.JSON(input.NameJSON),
+		Icon:      input.Icon,
 		SortOrder: input.SortOrder,
 	}
 	if err := s.repo.Create(&category); err != nil {
@@ -68,6 +70,7 @@ func (s *CategoryService) Update(id string, input CreateCategoryInput) (*models.
 
 	category.Slug = input.Slug
 	category.NameJSON = models.JSON(input.NameJSON)
+	category.Icon = input.Icon
 	category.SortOrder = input.SortOrder
 
 	if err := s.repo.Update(category); err != nil {

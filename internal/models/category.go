@@ -61,6 +61,7 @@ type Category struct {
 	ID        uint           `gorm:"primarykey" json:"id"`              // 主键
 	Slug      string         `gorm:"uniqueIndex;not null" json:"slug"`  // 唯一标识
 	NameJSON  JSON           `gorm:"type:json;not null" json:"name"`    // 多语言名称
+	Icon      string         `gorm:"type:varchar(500)" json:"icon"`     // 分类图标（图片路径）
 	SortOrder int            `gorm:"default:0;index" json:"sort_order"` // 排序权重
 	CreatedAt time.Time      `gorm:"index" json:"created_at"`           // 创建时间
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`                    // 软删除时间
