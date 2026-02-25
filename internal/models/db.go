@@ -89,6 +89,8 @@ func AutoMigrate() error {
 		&Payment{},
 		&CardSecret{},
 		&CardSecretBatch{},
+		&GiftCard{},
+		&GiftCardBatch{},
 		&Fulfillment{},
 		&Coupon{},
 		&CouponUsage{},

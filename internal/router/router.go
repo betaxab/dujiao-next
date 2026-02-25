@@ -126,6 +126,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 			user.POST("/wallet/recharge", publicHandler.RechargeWallet)
 			user.GET("/wallet/recharges/:recharge_no", publicHandler.GetMyWalletRecharge)
 			user.POST("/wallet/recharge/payments/:id/capture", publicHandler.CaptureMyWalletRechargePayment)
+			user.POST("/gift-cards/redeem", publicHandler.RedeemGiftCard)
 		}
 
 		apiV1.POST("/payments/callback", publicHandler.PaymentCallback)
@@ -223,6 +224,12 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 				authorized.GET("/card-secrets/stats", adminHandler.GetCardSecretStats)
 				authorized.GET("/card-secrets/batches", adminHandler.GetCardSecretBatches)
 				authorized.GET("/card-secrets/template", adminHandler.GetCardSecretTemplate)
+				authorized.POST("/gift-cards/generate", adminHandler.GenerateGiftCards)
+				authorized.GET("/gift-cards", adminHandler.GetGiftCards)
+				authorized.PUT("/gift-cards/:id", adminHandler.UpdateGiftCard)
+				authorized.DELETE("/gift-cards/:id", adminHandler.DeleteGiftCard)
+				authorized.PATCH("/gift-cards/batch-status", adminHandler.BatchUpdateGiftCardStatus)
+				authorized.POST("/gift-cards/export", adminHandler.ExportGiftCards)
 
 				// 优惠券与活动价
 				authorized.POST("/coupons", adminHandler.CreateCoupon)

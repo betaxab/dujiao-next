@@ -64,6 +64,7 @@ const (
 	WalletTxnTypeOrderRefund = "order_refund"
 	WalletTxnTypeAdminAdjust = "admin_adjust"
 	WalletTxnTypeAdminRefund = "admin_refund"
+	WalletTxnTypeGiftCard    = "gift_card_redeem"
 )
 
 // 钱包交易方向常量
@@ -198,6 +199,7 @@ const (
 	CaptchaSceneRegisterSendCode = "register_send_code"
 	CaptchaSceneResetSendCode    = "reset_send_code"
 	CaptchaSceneGuestCreateOrder = "guest_create_order"
+	CaptchaSceneGiftCardRedeem   = "gift_card_redeem"
 )
 
 // 队列常量

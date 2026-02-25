@@ -26,6 +26,7 @@ type Container struct {
 	PaymentChannelRepo    repository.PaymentChannelRepository
 	CardSecretRepo        repository.CardSecretRepository
 	CardSecretBatchRepo   repository.CardSecretBatchRepository
+	GiftCardRepo          repository.GiftCardRepository
 	FulfillmentRepo       repository.FulfillmentRepository
 	ProductRepo           repository.ProductRepository
 	ProductSKURepo        repository.ProductSKURepository
@@ -63,6 +64,7 @@ type Container struct {
 	BannerService         *service.BannerService
 	PaymentService        *service.PaymentService
 	CardSecretService     *service.CardSecretService
+	GiftCardService       *service.GiftCardService
 	UserLoginLogService   *service.UserLoginLogService
 	AuthzAuditService     *service.AuthzAuditService
 	DashboardService      *service.DashboardService
@@ -111,6 +113,7 @@ func (c *Container) initRepositories() {
 	c.PaymentChannelRepo = repository.NewPaymentChannelRepository(db)
 	c.CardSecretRepo = repository.NewCardSecretRepository(db)
 	c.CardSecretBatchRepo = repository.NewCardSecretBatchRepository(db)
+	c.GiftCardRepo = repository.NewGiftCardRepository(db)
 	c.FulfillmentRepo = repository.NewFulfillmentRepository(db)
 	c.ProductRepo = repository.NewProductRepository(db)
 	c.ProductSKURepo = repository.NewProductSKURepository(db)
@@ -176,6 +179,7 @@ func (c *Container) initServices() {
 	c.OrderService = service.NewOrderService(c.OrderRepo, c.ProductRepo, c.ProductSKURepo, c.CardSecretRepo, c.CouponRepo, c.CouponUsageRepo, c.PromotionRepo, c.QueueClient, c.SettingService, c.WalletService, c.Config.Order.PaymentExpireMinutes)
 	c.FulfillmentService = service.NewFulfillmentService(c.OrderRepo, c.FulfillmentRepo, c.CardSecretRepo, c.QueueClient)
 	c.CardSecretService = service.NewCardSecretService(c.CardSecretRepo, c.CardSecretBatchRepo, c.ProductRepo, c.ProductSKURepo)
+	c.GiftCardService = service.NewGiftCardService(c.GiftCardRepo, c.UserRepo, c.WalletService, c.SettingService)
 	c.CouponAdminService = service.NewCouponAdminService(c.CouponRepo)
 	c.PromotionAdminService = service.NewPromotionAdminService(c.PromotionRepo)
 	c.BannerService = service.NewBannerService(c.BannerRepo)

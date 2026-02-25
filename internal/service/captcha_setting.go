@@ -10,9 +10,9 @@ import (
 )
 
 // CaptchaSceneSetting 验证码场景配置
-// 注意：仅维护业务约定的 4 个场景
+// 注意：仅维护业务约定的 5 个场景
 // login 场景同时作用于前台用户登录与后台管理员登录
-// 其余场景分别对应注册发码、找回发码、游客下单
+// 其余场景分别对应注册发码、找回发码、游客下单、礼品卡兑换
 // 该结构用于 settings 存储与前后台接口通信
 // 并由服务层统一归一化和校验
 //
@@ -22,6 +22,7 @@ type CaptchaSceneSetting struct {
 	RegisterSendCode bool `json:"register_send_code"`
 	ResetSendCode    bool `json:"reset_send_code"`
 	GuestCreateOrder bool `json:"guest_create_order"`
+	GiftCardRedeem   bool `json:"gift_card_redeem"`
 }
 
 // CaptchaImageSetting 图片验证码配置
@@ -57,6 +58,7 @@ type CaptchaScenePatch struct {
 	RegisterSendCode *bool `json:"register_send_code"`
 	ResetSendCode    *bool `json:"reset_send_code"`
 	GuestCreateOrder *bool `json:"guest_create_order"`
+	GiftCardRedeem   *bool `json:"gift_card_redeem"`
 }
 
 // CaptchaImagePatch 图片配置补丁
@@ -95,6 +97,7 @@ func CaptchaDefaultSetting(cfg config.CaptchaConfig) CaptchaSetting {
 			RegisterSendCode: cfg.Scenes.RegisterSendCode,
 			ResetSendCode:    cfg.Scenes.ResetSendCode,
 			GuestCreateOrder: cfg.Scenes.GuestCreateOrder,
+			GiftCardRedeem:   cfg.Scenes.GiftCardRedeem,
 		},
 		Image: CaptchaImageSetting{
 			Length:        cfg.Image.Length,
@@ -209,6 +212,7 @@ func CaptchaSettingToConfig(setting CaptchaSetting) config.CaptchaConfig {
 			RegisterSendCode: normalized.Scenes.RegisterSendCode,
 			ResetSendCode:    normalized.Scenes.ResetSendCode,
 			GuestCreateOrder: normalized.Scenes.GuestCreateOrder,
+			GiftCardRedeem:   normalized.Scenes.GiftCardRedeem,
 		},
 		Image: config.CaptchaImageConfig{
 			Length:        normalized.Image.Length,
@@ -238,6 +242,7 @@ func CaptchaSettingToMap(setting CaptchaSetting) map[string]interface{} {
 			"register_send_code": normalized.Scenes.RegisterSendCode,
 			"reset_send_code":    normalized.Scenes.ResetSendCode,
 			"guest_create_order": normalized.Scenes.GuestCreateOrder,
+			"gift_card_redeem":   normalized.Scenes.GiftCardRedeem,
 		},
 		"image": map[string]interface{}{
 			"length":         normalized.Image.Length,
@@ -267,6 +272,7 @@ func MaskCaptchaSettingForAdmin(setting CaptchaSetting) models.JSON {
 			"register_send_code": normalized.Scenes.RegisterSendCode,
 			"reset_send_code":    normalized.Scenes.ResetSendCode,
 			"guest_create_order": normalized.Scenes.GuestCreateOrder,
+			"gift_card_redeem":   normalized.Scenes.GiftCardRedeem,
 		},
 		"image": map[string]interface{}{
 			"length":         normalized.Image.Length,
@@ -297,6 +303,7 @@ func PublicCaptchaSetting(setting CaptchaSetting) models.JSON {
 			"register_send_code": normalized.Scenes.RegisterSendCode,
 			"reset_send_code":    normalized.Scenes.ResetSendCode,
 			"guest_create_order": normalized.Scenes.GuestCreateOrder,
+			"gift_card_redeem":   normalized.Scenes.GiftCardRedeem,
 		},
 	}
 	if normalized.Provider == constants.CaptchaProviderTurnstile {
@@ -308,7 +315,7 @@ func PublicCaptchaSetting(setting CaptchaSetting) models.JSON {
 }
 
 func (s CaptchaSceneSetting) anyEnabled() bool {
-	return s.Login || s.RegisterSendCode || s.ResetSendCode || s.GuestCreateOrder
+	return s.Login || s.RegisterSendCode || s.ResetSendCode || s.GuestCreateOrder || s.GiftCardRedeem
 }
 
 // IsSceneEnabled 判断指定场景是否开启
@@ -322,6 +329,8 @@ func (s CaptchaSetting) IsSceneEnabled(scene string) bool {
 		return s.Scenes.ResetSendCode
 	case constants.CaptchaSceneGuestCreateOrder:
 		return s.Scenes.GuestCreateOrder
+	case constants.CaptchaSceneGiftCardRedeem:
+		return s.Scenes.GiftCardRedeem
 	default:
 		return false
 	}
@@ -364,6 +373,9 @@ func (s *SettingService) PatchCaptchaSetting(defaultCfg config.CaptchaConfig, pa
 		}
 		if patch.Scenes.GuestCreateOrder != nil {
 			next.Scenes.GuestCreateOrder = *patch.Scenes.GuestCreateOrder
+		}
+		if patch.Scenes.GiftCardRedeem != nil {
+			next.Scenes.GiftCardRedeem = *patch.Scenes.GiftCardRedeem
 		}
 	}
 	if patch.Image != nil {
@@ -433,6 +445,7 @@ func captchaSettingFromJSON(raw models.JSON, fallback CaptchaSetting) CaptchaSet
 			next.Scenes.RegisterSendCode = readBool(scenesMap, "register_send_code", next.Scenes.RegisterSendCode)
 			next.Scenes.ResetSendCode = readBool(scenesMap, "reset_send_code", next.Scenes.ResetSendCode)
 			next.Scenes.GuestCreateOrder = readBool(scenesMap, "guest_create_order", next.Scenes.GuestCreateOrder)
+			next.Scenes.GiftCardRedeem = readBool(scenesMap, "gift_card_redeem", next.Scenes.GiftCardRedeem)
 		}
 	}
 

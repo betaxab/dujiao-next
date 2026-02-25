@@ -41,6 +41,17 @@ type WalletAdjustInput struct {
 	Remark   string
 }
 
+// WalletCreditInput 事务内入账输入
+type WalletCreditInput struct {
+	UserID    uint
+	Amount    models.Money
+	Currency  string
+	TxnType   string
+	Reference string
+	Remark    string
+	OrderID   *uint
+}
+
 // AdminRefundToWalletInput 管理员退款到余额输入
 type AdminRefundToWalletInput struct {
 	OrderID uint
@@ -455,6 +466,80 @@ func (s *WalletService) ApplyRechargePayment(tx *gorm.DB, recharge *models.Walle
 		return nil, ErrWalletTransactionCreateFailed
 	}
 	return txn, nil
+}
+
+// CreditInTx 在事务内执行钱包入账并写入唯一参考号流水
+func (s *WalletService) CreditInTx(tx *gorm.DB, input WalletCreditInput) (*models.WalletAccount, *models.WalletTransaction, error) {
+	if tx == nil {
+		return nil, nil, ErrOrderUpdateFailed
+	}
+	if input.UserID == 0 {
+		return nil, nil, ErrWalletAccountNotFound
+	}
+	amount := input.Amount.Decimal.Round(2)
+	if amount.LessThanOrEqual(decimal.Zero) {
+		return nil, nil, ErrWalletInvalidAmount
+	}
+	reference := strings.TrimSpace(input.Reference)
+	if reference == "" {
+		return nil, nil, ErrWalletTransactionCreateFailed
+	}
+	txnType := strings.TrimSpace(input.TxnType)
+	if txnType == "" {
+		txnType = constants.WalletTxnTypeRecharge
+	}
+	remark := cleanWalletRemark(input.Remark, "钱包入账")
+	now := time.Now()
+	repo := s.walletRepo.WithTx(tx)
+
+	exists, err := repo.GetTransactionByReference(reference)
+	if err != nil {
+		return nil, nil, err
+	}
+	if exists != nil {
+		account, accountErr := repo.GetAccountByUserID(input.UserID)
+		if accountErr != nil {
+			return nil, nil, accountErr
+		}
+		if account == nil {
+			account, accountErr = s.ensureAccountForUpdate(repo, input.UserID, now)
+			if accountErr != nil {
+				return nil, nil, accountErr
+			}
+		}
+		return account, exists, nil
+	}
+
+	account, err := s.ensureAccountForUpdate(repo, input.UserID, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	before := account.Balance.Decimal.Round(2)
+	after := before.Add(amount).Round(2)
+	account.Balance = models.NewMoneyFromDecimal(after)
+	account.UpdatedAt = now
+	if err := repo.UpdateAccount(account); err != nil {
+		return nil, nil, ErrWalletAccountUpdateFailed
+	}
+
+	txn := &models.WalletTransaction{
+		UserID:        input.UserID,
+		OrderID:       input.OrderID,
+		Type:          txnType,
+		Direction:     constants.WalletTxnDirectionIn,
+		Amount:        models.NewMoneyFromDecimal(amount),
+		BalanceBefore: models.NewMoneyFromDecimal(before),
+		BalanceAfter:  models.NewMoneyFromDecimal(after),
+		Currency:      normalizeWalletCurrency(input.Currency),
+		Reference:     reference,
+		Remark:        remark,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if err := repo.CreateTransaction(txn); err != nil {
+		return nil, nil, ErrWalletTransactionCreateFailed
+	}
+	return account, txn, nil
 }
 
 func (s *WalletService) changeBalance(userID uint, delta decimal.Decimal, txnType string, orderID *uint, reference, remark, currency string) (*models.WalletAccount, *models.WalletTransaction, error) {
