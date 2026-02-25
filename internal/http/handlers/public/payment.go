@@ -202,19 +202,6 @@ func (h *Handler) GetLatestPayment(c *gin.Context) {
 	})
 }
 
-// PaymentCallbackRequest 支付回调请求
-type PaymentCallbackRequest struct {
-	PaymentID   uint        `json:"payment_id" form:"payment_id"`
-	OrderNo     string      `json:"order_no" form:"order_no"`
-	ChannelID   uint        `json:"channel_id" form:"channel_id"`
-	Status      string      `json:"status" form:"status"`
-	ProviderRef string      `json:"provider_ref" form:"provider_ref"`
-	Amount      string      `json:"amount" form:"amount"`
-	Currency    string      `json:"currency" form:"currency"`
-	PaidAt      string      `json:"paid_at" form:"paid_at"`
-	Payload     models.JSON `json:"payload"`
-}
-
 // PaymentCallback 支付回调
 func (h *Handler) PaymentCallback(c *gin.Context) {
 	if handled := h.HandleWechatCallback(c); handled {
@@ -229,68 +216,12 @@ func (h *Handler) PaymentCallback(c *gin.Context) {
 	if handled := h.HandleEpusdtCallback(c); handled {
 		return
 	}
-	var req PaymentCallbackRequest
-	if err := c.ShouldBind(&req); err != nil {
-		respondError(c, response.CodeBadRequest, "error.bad_request", err)
-		return
-	}
-
-	var paidAt *time.Time
-	if req.PaidAt != "" {
-		parsed, err := time.Parse(time.RFC3339, req.PaidAt)
-		if err != nil {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		paidAt = &parsed
-	}
-
-	amount := models.Money{}
-	if req.Amount != "" {
-		parsed, err := decimal.NewFromString(req.Amount)
-		if err != nil {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		amount = models.NewMoneyFromDecimal(parsed)
-	}
-
-	payment, err := h.PaymentService.HandleCallback(service.PaymentCallbackInput{
-		PaymentID:   req.PaymentID,
-		OrderNo:     req.OrderNo,
-		ChannelID:   req.ChannelID,
-		Status:      req.Status,
-		ProviderRef: req.ProviderRef,
-		Amount:      amount,
-		Currency:    req.Currency,
-		PaidAt:      paidAt,
-		Payload:     req.Payload,
-	})
-	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrPaymentInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
-		case errors.Is(err, service.ErrPaymentNotFound):
-			respondError(c, response.CodeNotFound, "error.payment_not_found", nil)
-		case errors.Is(err, service.ErrPaymentStatusInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_status_invalid", nil)
-		case errors.Is(err, service.ErrPaymentAmountMismatch):
-			respondError(c, response.CodeBadRequest, "error.payment_amount_mismatch", nil)
-		case errors.Is(err, service.ErrPaymentCurrencyMismatch):
-			respondError(c, response.CodeBadRequest, "error.payment_currency_mismatch", nil)
-		case errors.Is(err, service.ErrOrderNotFound):
-			respondError(c, response.CodeNotFound, "error.order_not_found", nil)
-		default:
-			respondError(c, response.CodeInternal, "error.payment_callback_failed", err)
-		}
-		return
-	}
-
-	response.Success(c, gin.H{
-		"updated":    true,
-		"payment_id": payment.ID,
-		"status":     payment.Status,
-	})
+	requestLog(c).Warnw("payment_callback_unrecognized",
+		"method", c.Request.Method,
+		"client_ip", c.ClientIP(),
+		"content_type", strings.TrimSpace(c.GetHeader("Content-Type")),
+	)
+	c.String(http.StatusBadRequest, constants.EpayCallbackFail)
 }
 
 // PaypalWebhook PayPal webhook 回调。
