@@ -539,8 +539,9 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 			promotionDiscountAmount = promotionDiscountAmount.Add(promotionDiscount).Round(2)
 		}
 
+		baseTotal := basePrice.Mul(decimal.NewFromInt(int64(item.Quantity))).Round(2)
 		total := unitPriceAmount.Mul(decimal.NewFromInt(int64(item.Quantity))).Round(2)
-		originalAmount = originalAmount.Add(total).Round(2)
+		originalAmount = originalAmount.Add(baseTotal).Round(2)
 		fulfillmentType := strings.TrimSpace(product.FulfillmentType)
 		if fulfillmentType == "" {
 			fulfillmentType = constants.FulfillmentTypeManual
@@ -655,6 +656,9 @@ func (s *OrderService) buildOrderResult(input orderCreateParams) (*orderBuildRes
 			planTotal = decimal.Zero
 		}
 		totalAmount = totalAmount.Add(planTotal).Round(2)
+	}
+	if totalAmount.LessThanOrEqual(decimal.Zero) {
+		return nil, ErrInvalidOrderAmount
 	}
 
 	return &orderBuildResult{
