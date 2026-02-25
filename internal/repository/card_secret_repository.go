@@ -24,10 +24,19 @@ type CardSecretRepository interface {
 	CountAvailable(productID, skuID uint) (int64, error)
 	CountAvailableByProductIDs(productIDs []uint) (map[uint]int64, error)
 	CountReserved(productID, skuID uint) (int64, error)
+	CountStockByProductIDs(productIDs []uint) ([]SKUStockCount, error)
 	Reserve(ids []uint, orderID uint, reservedAt time.Time) (int64, error)
 	ReleaseByOrder(orderID uint) (int64, error)
 	MarkUsed(ids []uint, orderID uint, usedAt time.Time) (int64, error)
 	WithTx(tx *gorm.DB) *GormCardSecretRepository
+}
+
+// SKUStockCount 卡密库存统计结果
+type SKUStockCount struct {
+	ProductID uint
+	SKUID     uint
+	Status    string
+	Total     int64
 }
 
 // GormCardSecretRepository GORM 实现
@@ -258,6 +267,24 @@ func (r *GormCardSecretRepository) CountAvailableByProductIDs(productIDs []uint)
 	}
 
 	return result, nil
+}
+
+// CountStockByProductIDs 批量获取商品的 SKUs 的各状态卡密数量
+func (r *GormCardSecretRepository) CountStockByProductIDs(productIDs []uint) ([]SKUStockCount, error) {
+	if len(productIDs) == 0 {
+		return []SKUStockCount{}, nil
+	}
+
+	var rows []SKUStockCount
+	if err := r.db.Model(&models.CardSecret{}).
+		Select("product_id, sku_id, status, COUNT(*) as total").
+		Where("product_id IN ?", productIDs).
+		Group("product_id, sku_id, status").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	return rows, nil
 }
 
 // CountReserved 统计占用库存

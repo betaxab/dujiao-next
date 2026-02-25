@@ -24,6 +24,10 @@ type Product struct {
 	ManualStockTotal     int            `gorm:"not null;default:0" json:"manual_stock_total"`                       // 手动库存总量（0 表示不启用手动库存控制）
 	ManualStockLocked    int            `gorm:"not null;default:0" json:"manual_stock_locked"`                      // 手动库存占用量（待支付）
 	ManualStockSold      int            `gorm:"not null;default:0" json:"manual_stock_sold"`                        // 手动库存已售量（支付成功后累加）
+	AutoStockAvailable   int64          `gorm:"-" json:"auto_stock_available"`                                      // 自动发货库存可用量（仅结构，不写入数据库）
+	AutoStockTotal       int64          `gorm:"-" json:"auto_stock_total"`                                          // 自动发货库存总量（仅结构，不写入数据库）
+	AutoStockLocked      int64          `gorm:"-" json:"auto_stock_locked"`                                         // 自动发货库存占用量（仅结构，不写入数据库）
+	AutoStockSold        int64          `gorm:"-" json:"auto_stock_sold"`                                           // 自动发货库存已售量（仅结构，不写入数据库）
 	IsActive             bool           `gorm:"default:true;index" json:"is_active"`                                // 是否上架
 	SortOrder            int            `gorm:"default:0;index" json:"sort_order"`                                  // 排序权重
 	CreatedAt            time.Time      `gorm:"index" json:"created_at"`                                            // 创建时间

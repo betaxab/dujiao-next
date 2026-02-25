@@ -168,7 +168,7 @@ func (c *Container) initServices() {
 	c.TelegramAuthService = service.NewTelegramAuthService(c.Config.TelegramAuth)
 	c.UserAuthService = service.NewUserAuthService(c.Config, c.UserRepo, c.UserOAuthIdentityRepo, c.EmailVerifyCodeRepo, c.EmailService, c.TelegramAuthService)
 	c.UploadService = service.NewUploadService(c.Config)
-	c.ProductService = service.NewProductService(c.ProductRepo, c.ProductSKURepo)
+	c.ProductService = service.NewProductService(c.ProductRepo, c.ProductSKURepo, c.CardSecretRepo)
 	c.PostService = service.NewPostService(c.PostRepo)
 	c.CategoryService = service.NewCategoryService(c.CategoryRepo)
 	c.CartService = service.NewCartService(c.CartRepo, c.ProductRepo, c.ProductSKURepo, c.PromotionRepo, c.SettingService)

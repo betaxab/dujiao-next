@@ -14,15 +14,17 @@ import (
 
 // ProductService 商品业务服务
 type ProductService struct {
-	repo           repository.ProductRepository
-	productSKURepo repository.ProductSKURepository
+	repo             repository.ProductRepository
+	productSKURepo   repository.ProductSKURepository
+	cardSecretRepo   repository.CardSecretRepository
 }
 
 // NewProductService 创建商品服务
-func NewProductService(repo repository.ProductRepository, productSKURepo repository.ProductSKURepository) *ProductService {
+func NewProductService(repo repository.ProductRepository, productSKURepo repository.ProductSKURepository, cardSecretRepo repository.CardSecretRepository) *ProductService {
 	return &ProductService{
-		repo:           repo,
-		productSKURepo: productSKURepo,
+		repo:             repo,
+		productSKURepo:   productSKURepo,
+		cardSecretRepo:   cardSecretRepo,
 	}
 }
 
@@ -573,4 +575,70 @@ func (s *ProductService) Delete(id string) error {
 		return ErrNotFound
 	}
 	return s.repo.Delete(id)
+}
+
+// ApplyAutoStockCounts 聚合卡密自动发货库存信息并填充到商品中
+func (s *ProductService) ApplyAutoStockCounts(products []models.Product) error {
+	var productIDs []uint
+	for _, p := range products {
+		if p.FulfillmentType == constants.FulfillmentTypeAuto {
+			productIDs = append(productIDs, p.ID)
+		}
+	}
+	if len(productIDs) == 0 {
+		return nil
+	}
+
+	counts, err := s.cardSecretRepo.CountStockByProductIDs(productIDs)
+	if err != nil {
+		return err
+	}
+
+	// map[product_id]map[sku_id]map[status]total
+	stockMap := make(map[uint]map[uint]map[string]int64)
+	for _, count := range counts {
+		if stockMap[count.ProductID] == nil {
+			stockMap[count.ProductID] = make(map[uint]map[string]int64)
+		}
+		if stockMap[count.ProductID][count.SKUID] == nil {
+			stockMap[count.ProductID][count.SKUID] = make(map[string]int64)
+		}
+		stockMap[count.ProductID][count.SKUID][count.Status] = count.Total
+	}
+
+	for i := range products {
+		if products[i].FulfillmentType != constants.FulfillmentTypeAuto {
+			continue
+		}
+		pMap := stockMap[products[i].ID]
+		if pMap == nil {
+			continue
+		}
+
+		var pAvailable, pLocked, pUsed int64
+		for _, statusMap := range pMap {
+			pAvailable += statusMap[models.CardSecretStatusAvailable]
+			pLocked += statusMap[models.CardSecretStatusReserved]
+			pUsed += statusMap[models.CardSecretStatusUsed]
+		}
+		products[i].AutoStockAvailable = pAvailable
+		products[i].AutoStockTotal = pAvailable + pLocked
+		products[i].AutoStockLocked = pLocked
+		products[i].AutoStockSold = pUsed
+
+		for j := range products[i].SKUs {
+			skuID := products[i].SKUs[j].ID
+			statusMap := pMap[skuID]
+			// 如果 skuID 为 0 的卡密存在，则合并到所有 SKU 中（旧数据兼容）或者合并到第一个 SKU
+			// 根据业务逻辑如果是单规格默认 skuID 为 0， 这里为匹配精确 SKU + 通用 SKU(id=0)
+			available := statusMap[models.CardSecretStatusAvailable] + pMap[0][models.CardSecretStatusAvailable]
+			locked := statusMap[models.CardSecretStatusReserved] + pMap[0][models.CardSecretStatusReserved]
+			used := statusMap[models.CardSecretStatusUsed] + pMap[0][models.CardSecretStatusUsed]
+			products[i].SKUs[j].AutoStockAvailable = available
+			products[i].SKUs[j].AutoStockTotal = available + locked
+			products[i].SKUs[j].AutoStockLocked = locked
+			products[i].SKUs[j].AutoStockSold = used
+		}
+	}
+	return nil
 }

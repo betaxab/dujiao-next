@@ -9,6 +9,7 @@ import (
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/i18n"
+	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -27,6 +28,11 @@ func (h *Handler) GetAdminProducts(c *gin.Context) {
 
 	products, total, err := h.ProductService.ListAdmin(categoryID, search, fulfillmentType, manualStockStatus, page, pageSize)
 	if err != nil {
+		respondError(c, response.CodeInternal, "error.product_fetch_failed", err)
+		return
+	}
+
+	if err := h.ProductService.ApplyAutoStockCounts(products); err != nil {
 		respondError(c, response.CodeInternal, "error.product_fetch_failed", err)
 		return
 	}
@@ -57,6 +63,13 @@ func (h *Handler) GetAdminProduct(c *gin.Context) {
 		respondError(c, response.CodeInternal, "error.product_fetch_failed", err)
 		return
 	}
+
+	temp := []models.Product{*product}
+	if err := h.ProductService.ApplyAutoStockCounts(temp); err != nil {
+		respondError(c, response.CodeInternal, "error.product_fetch_failed", err)
+		return
+	}
+	*product = temp[0]
 
 	response.Success(c, product)
 }

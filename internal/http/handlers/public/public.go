@@ -128,31 +128,15 @@ func (h *Handler) GetProducts(c *gin.Context) {
 	if h.PromotionRepo != nil {
 		promotionService = service.NewPromotionService(h.PromotionRepo)
 	}
-	autoStockMap := make(map[uint]int64)
-	if h.CardSecretRepo != nil {
-		autoProductIDs := make([]uint, 0)
-		for i := range products {
-			if strings.TrimSpace(products[i].FulfillmentType) != constants.FulfillmentTypeAuto {
-				continue
-			}
-			if products[i].ID == 0 {
-				continue
-			}
-			autoProductIDs = append(autoProductIDs, products[i].ID)
-		}
-		if len(autoProductIDs) > 0 {
-			counts, countErr := h.CardSecretRepo.CountAvailableByProductIDs(autoProductIDs)
-			if countErr != nil {
-				respondError(c, response.CodeInternal, "error.product_fetch_failed", countErr)
-				return
-			}
-			autoStockMap = counts
-		}
+
+	if err := h.ProductService.ApplyAutoStockCounts(products); err != nil {
+		respondError(c, response.CodeInternal, "error.product_fetch_failed", err)
+		return
 	}
 
 	decorated := make([]PublicProductView, 0, len(products))
 	for i := range products {
-		item, derr := h.decoratePublicProduct(&products[i], promotionService, autoStockMap)
+		item, derr := h.decoratePublicProduct(&products[i], promotionService)
 		if derr != nil {
 			respondError(c, response.CodeInternal, "error.product_fetch_failed", derr)
 			return
@@ -188,17 +172,15 @@ func (h *Handler) GetProductBySlug(c *gin.Context) {
 	if h.PromotionRepo != nil {
 		promotionService = service.NewPromotionService(h.PromotionRepo)
 	}
-	autoStockMap := make(map[uint]int64)
-	if h.CardSecretRepo != nil && strings.TrimSpace(product.FulfillmentType) == constants.FulfillmentTypeAuto {
-		count, countErr := h.CardSecretRepo.CountAvailable(product.ID, 0)
-		if countErr != nil {
-			respondError(c, response.CodeInternal, "error.product_fetch_failed", countErr)
-			return
-		}
-		autoStockMap[product.ID] = count
-	}
 
-	decorated, derr := h.decoratePublicProduct(product, promotionService, autoStockMap)
+	temp := []models.Product{*product}
+	if err := h.ProductService.ApplyAutoStockCounts(temp); err != nil {
+		respondError(c, response.CodeInternal, "error.product_fetch_failed", err)
+		return
+	}
+	*product = temp[0]
+
+	decorated, derr := h.decoratePublicProduct(product, promotionService)
 	if derr != nil {
 		respondError(c, response.CodeInternal, "error.product_fetch_failed", derr)
 		return
@@ -207,13 +189,13 @@ func (h *Handler) GetProductBySlug(c *gin.Context) {
 	response.Success(c, decorated)
 }
 
-func (h *Handler) decoratePublicProduct(product *models.Product, promotionService *service.PromotionService, autoStockMap map[uint]int64) (PublicProductView, error) {
+func (h *Handler) decoratePublicProduct(product *models.Product, promotionService *service.PromotionService) (PublicProductView, error) {
 	if product == nil {
 		return PublicProductView{}, nil
 	}
 
 	item := PublicProductView{Product: *product}
-	h.decorateProductStock(product, &item, autoStockMap)
+	h.decorateProductStock(product, &item)
 	if promotionService == nil {
 		return item, nil
 	}
@@ -241,7 +223,7 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 	return item, nil
 }
 
-func (h *Handler) decorateProductStock(product *models.Product, item *PublicProductView, autoStockMap map[uint]int64) {
+func (h *Handler) decorateProductStock(product *models.Product, item *PublicProductView) {
 	if product == nil || item == nil {
 		return
 	}
@@ -253,6 +235,9 @@ func (h *Handler) decorateProductStock(product *models.Product, item *PublicProd
 	}
 
 	item.ManualStockAvailable = manualAvailable
+	item.AutoStockTotal = 0
+	item.AutoStockLocked = 0
+	item.AutoStockSold = 0
 	item.AutoStockAvailable = 0
 	item.StockStatus = stockStatus
 	item.IsSoldOut = false
@@ -282,10 +267,19 @@ func (h *Handler) decorateProductStock(product *models.Product, item *PublicProd
 	}
 
 	autoAvailable := int64(0)
-	if autoStockMap != nil {
-		autoAvailable = autoStockMap[product.ID]
+	autoTotal := int64(0)
+	autoLocked := int64(0)
+	autoSold := int64(0)
+	for _, sku := range product.SKUs {
+		autoAvailable += sku.AutoStockAvailable
+		autoTotal += sku.AutoStockTotal
+		autoLocked += sku.AutoStockLocked
+		autoSold += sku.AutoStockSold
 	}
 	item.AutoStockAvailable = autoAvailable
+	item.AutoStockTotal = autoTotal
+	item.AutoStockLocked = autoLocked
+	item.AutoStockSold = autoSold
 
 	switch {
 	case autoAvailable <= 0:

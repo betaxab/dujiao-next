@@ -53,6 +53,13 @@ func (r *GormProductRepository) List(filter ProductListFilter) ([]models.Product
 	}
 	if filter.OnlyActive {
 		query = query.Where("is_active = ?", true)
+		query = query.Preload("SKUs", func(db *gorm.DB) *gorm.DB {
+			return db.Where("is_active = ?", true).Order("sort_order DESC, id ASC")
+		})
+	} else {
+		query = query.Preload("SKUs", func(db *gorm.DB) *gorm.DB {
+			return db.Order("sort_order DESC, id ASC")
+		})
 	}
 	if filter.CategoryID != "" {
 		query = query.Where("category_id = ?", filter.CategoryID)
