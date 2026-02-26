@@ -127,6 +127,9 @@ func ValidateConfig(cfg *Config) error {
 	if _, err := url.ParseRequestURI(strings.TrimSpace(cfg.CancelURL)); err != nil {
 		return fmt.Errorf("%w: cancel_url is invalid", ErrConfigInvalid)
 	}
+	if strings.TrimSpace(cfg.WebhookID) == "" {
+		return fmt.Errorf("%w: webhook_id is required", ErrConfigInvalid)
+	}
 	return nil
 }
 
@@ -358,6 +361,18 @@ func (e *WebhookEvent) CaptureAmount() (string, string) {
 	}
 	value := strings.TrimSpace(readString(e.Resource, "amount", "value"))
 	currency := strings.TrimSpace(readString(e.Resource, "amount", "currency_code"))
+	if value != "" && currency != "" {
+		return value, currency
+	}
+
+	value = strings.TrimSpace(readString(e.Resource, "purchase_units", "0", "amount", "value"))
+	currency = strings.TrimSpace(readString(e.Resource, "purchase_units", "0", "amount", "currency_code"))
+	if value != "" && currency != "" {
+		return value, currency
+	}
+
+	value = strings.TrimSpace(readString(e.Resource, "purchase_units", "0", "payments", "captures", "0", "amount", "value"))
+	currency = strings.TrimSpace(readString(e.Resource, "purchase_units", "0", "payments", "captures", "0", "amount", "currency_code"))
 	return value, currency
 }
 

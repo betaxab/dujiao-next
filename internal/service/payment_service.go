@@ -988,16 +988,14 @@ func (s *PaymentService) HandlePaypalWebhook(input WebhookCallbackInput) (*model
 	for key, value := range input.Headers {
 		headers.Set(key, value)
 	}
-	if strings.TrimSpace(cfg.WebhookID) != "" {
-		if err := paypal.VerifyWebhookSignature(ctx, cfg, headers, event.Raw); err != nil {
-			switch {
-			case errors.Is(err, paypal.ErrConfigInvalid):
-				return nil, event.EventType, fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
-			case errors.Is(err, paypal.ErrAuthFailed), errors.Is(err, paypal.ErrRequestFailed):
-				return nil, event.EventType, ErrPaymentGatewayRequestFailed
-			default:
-				return nil, event.EventType, ErrPaymentGatewayResponseInvalid
-			}
+	if err := paypal.VerifyWebhookSignature(ctx, cfg, headers, event.Raw); err != nil {
+		switch {
+		case errors.Is(err, paypal.ErrConfigInvalid):
+			return nil, event.EventType, fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
+		case errors.Is(err, paypal.ErrAuthFailed), errors.Is(err, paypal.ErrRequestFailed):
+			return nil, event.EventType, ErrPaymentGatewayRequestFailed
+		default:
+			return nil, event.EventType, ErrPaymentGatewayResponseInvalid
 		}
 	}
 
@@ -1019,12 +1017,9 @@ func (s *PaymentService) HandlePaypalWebhook(input WebhookCallbackInput) (*model
 		return payment, event.EventType, nil
 	}
 
-	amount := models.Money{}
-	amountValue, amountCurrency := event.CaptureAmount()
-	if amountValue != "" {
-		if parsed, parseErr := decimal.NewFromString(amountValue); parseErr == nil {
-			amount = models.NewMoneyFromDecimal(parsed)
-		}
+	amount, amountCurrency, err := buildPaypalCallbackAmount(event, status)
+	if err != nil {
+		return nil, event.EventType, err
 	}
 
 	resourceBytes, _ := json.Marshal(event.Raw)
@@ -1047,6 +1042,42 @@ func (s *PaymentService) HandlePaypalWebhook(input WebhookCallbackInput) (*model
 		return nil, event.EventType, err
 	}
 	return updated, event.EventType, nil
+}
+
+func buildPaypalCallbackAmount(event *paypal.WebhookEvent, status string) (models.Money, string, error) {
+	amount := models.Money{}
+	if event == nil {
+		return amount, "", ErrPaymentGatewayResponseInvalid
+	}
+
+	amountValue, amountCurrency := event.CaptureAmount()
+	amountValue = strings.TrimSpace(amountValue)
+	amountCurrency = strings.ToUpper(strings.TrimSpace(amountCurrency))
+
+	requiresAmount := strings.EqualFold(strings.TrimSpace(status), constants.PaymentStatusSuccess)
+	if requiresAmount {
+		if amountValue == "" || amountCurrency == "" {
+			return amount, "", ErrPaymentGatewayResponseInvalid
+		}
+	}
+
+	if amountValue == "" {
+		if amountCurrency != "" {
+			return amount, "", ErrPaymentGatewayResponseInvalid
+		}
+		return amount, "", nil
+	}
+
+	parsedAmount, err := decimal.NewFromString(amountValue)
+	if err != nil || parsedAmount.Cmp(decimal.Zero) <= 0 {
+		return amount, "", ErrPaymentGatewayResponseInvalid
+	}
+	if amountCurrency == "" {
+		return amount, "", ErrPaymentGatewayResponseInvalid
+	}
+
+	amount = models.NewMoneyFromDecimal(parsedAmount)
+	return amount, amountCurrency, nil
 }
 
 // HandleWechatWebhook 处理微信支付回调。

@@ -9,9 +9,23 @@ func TestValidateConfig(t *testing.T) {
 		BaseURL:      "https://api-m.sandbox.paypal.com",
 		ReturnURL:    "https://example.com/payment?order_id=1",
 		CancelURL:    "https://example.com/payment?order_id=1",
+		WebhookID:    "WH-123456",
 	}
 	if err := ValidateConfig(cfg); err != nil {
 		t.Fatalf("ValidateConfig should pass, got: %v", err)
+	}
+}
+
+func TestValidateConfigWebhookIDRequired(t *testing.T) {
+	cfg := &Config{
+		ClientID:     "cid",
+		ClientSecret: "secret",
+		BaseURL:      "https://api-m.sandbox.paypal.com",
+		ReturnURL:    "https://example.com/payment?order_id=1",
+		CancelURL:    "https://example.com/payment?order_id=1",
+	}
+	if err := ValidateConfig(cfg); err == nil {
+		t.Fatalf("ValidateConfig should fail when webhook_id is empty")
 	}
 }
 
@@ -82,5 +96,26 @@ func TestWebhookEventHelpers(t *testing.T) {
 	}
 	if status := event.ResourceStatus(); status != "COMPLETED" {
 		t.Fatalf("unexpected resource status: %s", status)
+	}
+}
+
+func TestWebhookEventHelpersCaptureAmountFallback(t *testing.T) {
+	event := &WebhookEvent{
+		EventType: "CHECKOUT.ORDER.COMPLETED",
+		Resource: map[string]interface{}{
+			"purchase_units": []interface{}{
+				map[string]interface{}{
+					"amount": map[string]interface{}{
+						"value":         "88.66",
+						"currency_code": "USD",
+					},
+				},
+			},
+		},
+	}
+
+	value, currency := event.CaptureAmount()
+	if value != "88.66" || currency != "USD" {
+		t.Fatalf("unexpected fallback amount info: %s %s", value, currency)
 	}
 }

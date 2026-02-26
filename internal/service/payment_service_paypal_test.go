@@ -5,6 +5,7 @@ import (
 
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/models"
+	"github.com/dujiao-next/internal/payment/paypal"
 )
 
 func TestMapPaypalStatus(t *testing.T) {
@@ -65,5 +66,75 @@ func TestShouldMarkFulfilling(t *testing.T) {
 	order = &models.Order{Items: []models.OrderItem{{FulfillmentType: constants.FulfillmentTypeManual}}}
 	if !shouldMarkFulfilling(order) {
 		t.Fatalf("manual items should require fulfilling")
+	}
+}
+
+func TestBuildPaypalCallbackAmountSuccess(t *testing.T) {
+	event := &paypal.WebhookEvent{
+		Resource: map[string]interface{}{
+			"amount": map[string]interface{}{
+				"value":         "12.34",
+				"currency_code": "usd",
+			},
+		},
+	}
+
+	amount, currency, err := buildPaypalCallbackAmount(event, constants.PaymentStatusSuccess)
+	if err != nil {
+		t.Fatalf("buildPaypalCallbackAmount should succeed, got: %v", err)
+	}
+	if amount.String() != "12.34" {
+		t.Fatalf("unexpected amount: %s", amount.String())
+	}
+	if currency != "USD" {
+		t.Fatalf("unexpected currency: %s", currency)
+	}
+}
+
+func TestBuildPaypalCallbackAmountSuccessMissingAmount(t *testing.T) {
+	event := &paypal.WebhookEvent{
+		Resource: map[string]interface{}{
+			"status": "COMPLETED",
+		},
+	}
+
+	_, _, err := buildPaypalCallbackAmount(event, constants.PaymentStatusSuccess)
+	if err == nil {
+		t.Fatalf("buildPaypalCallbackAmount should fail when success callback misses amount")
+	}
+}
+
+func TestBuildPaypalCallbackAmountSuccessInvalidAmount(t *testing.T) {
+	event := &paypal.WebhookEvent{
+		Resource: map[string]interface{}{
+			"amount": map[string]interface{}{
+				"value":         "invalid",
+				"currency_code": "USD",
+			},
+		},
+	}
+
+	_, _, err := buildPaypalCallbackAmount(event, constants.PaymentStatusSuccess)
+	if err == nil {
+		t.Fatalf("buildPaypalCallbackAmount should fail when amount is invalid")
+	}
+}
+
+func TestBuildPaypalCallbackAmountPendingAllowEmpty(t *testing.T) {
+	event := &paypal.WebhookEvent{
+		Resource: map[string]interface{}{
+			"status": "PENDING",
+		},
+	}
+
+	amount, currency, err := buildPaypalCallbackAmount(event, constants.PaymentStatusPending)
+	if err != nil {
+		t.Fatalf("buildPaypalCallbackAmount should allow empty amount for pending status, got: %v", err)
+	}
+	if !amount.Decimal.IsZero() {
+		t.Fatalf("expected zero amount for pending status, got: %s", amount.String())
+	}
+	if currency != "" {
+		t.Fatalf("expected empty currency for pending status, got: %s", currency)
 	}
 }
