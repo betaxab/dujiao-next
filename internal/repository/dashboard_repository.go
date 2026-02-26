@@ -100,6 +100,11 @@ func paidOrderStatuses() []string {
 	}
 }
 
+func onlinePaymentBase(db *gorm.DB, startAt, endAt time.Time) *gorm.DB {
+	return db.Model(&models.Payment{}).
+		Where("created_at >= ? AND created_at < ? AND provider_type <> ?", startAt, endAt, constants.PaymentProviderWallet)
+}
+
 // GetOverview 获取总览统计
 func (r *GormDashboardRepository) GetOverview(startAt, endAt time.Time) (DashboardOverviewRow, error) {
 	result := DashboardOverviewRow{}
@@ -141,8 +146,7 @@ func (r *GormDashboardRepository) GetOverview(startAt, endAt time.Time) (Dashboa
 	}
 
 	paymentBase := func() *gorm.DB {
-		return r.db.Model(&models.Payment{}).
-			Where("created_at >= ? AND created_at < ?", startAt, endAt)
+		return onlinePaymentBase(r.db, startAt, endAt)
 	}
 	if err := paymentBase().Count(&result.PaymentsTotal).Error; err != nil {
 		return result, err
@@ -237,9 +241,9 @@ func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]
 	dayExpr := "CAST(date(created_at) AS TEXT)"
 
 	var successRows []countRow
-	if err := r.db.Model(&models.Payment{}).
+	if err := onlinePaymentBase(r.db, startAt, endAt).
 		Select(fmt.Sprintf("%s as day, COUNT(*) as total", dayExpr)).
-		Where("created_at >= ? AND created_at < ? AND status = ?", startAt, endAt, constants.PaymentStatusSuccess).
+		Where("status = ?", constants.PaymentStatusSuccess).
 		Group(dayExpr).
 		Order("day asc").
 		Scan(&successRows).Error; err != nil {
@@ -247,9 +251,9 @@ func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]
 	}
 
 	var failedRows []countRow
-	if err := r.db.Model(&models.Payment{}).
+	if err := onlinePaymentBase(r.db, startAt, endAt).
 		Select(fmt.Sprintf("%s as day, COUNT(*) as total", dayExpr)).
-		Where("created_at >= ? AND created_at < ? AND status = ?", startAt, endAt, constants.PaymentStatusFailed).
+		Where("status = ?", constants.PaymentStatusFailed).
 		Group(dayExpr).
 		Order("day asc").
 		Scan(&failedRows).Error; err != nil {
@@ -257,9 +261,9 @@ func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]
 	}
 
 	var amountRows []amountRow
-	if err := r.db.Model(&models.Payment{}).
+	if err := onlinePaymentBase(r.db, startAt, endAt).
 		Select(fmt.Sprintf("%s as day, COALESCE(SUM(amount), 0) as total", dayExpr)).
-		Where("created_at >= ? AND created_at < ? AND status = ?", startAt, endAt, constants.PaymentStatusSuccess).
+		Where("status = ?", constants.PaymentStatusSuccess).
 		Group(dayExpr).
 		Order("day asc").
 		Scan(&amountRows).Error; err != nil {
@@ -430,7 +434,7 @@ func (r *GormDashboardRepository) GetTopChannels(startAt, endAt time.Time, limit
 			COALESCE(SUM(CASE WHEN payments.status = 'success' THEN payments.amount ELSE 0 END), 0) as success_amount
 		`).
 		Joins("LEFT JOIN payment_channels ON payment_channels.id = payments.channel_id").
-		Where("payments.created_at >= ? AND payments.created_at < ?", startAt, endAt).
+		Where("payments.created_at >= ? AND payments.created_at < ? AND payments.provider_type <> ?", startAt, endAt, constants.PaymentProviderWallet).
 		Group("payments.channel_id, payment_channels.name, payments.provider_type, payments.channel_type").
 		Order("success_amount DESC, success_count DESC").
 		Limit(limit).

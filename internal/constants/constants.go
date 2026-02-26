@@ -33,6 +33,7 @@ const (
 	PaymentProviderOfficial = "official"
 	PaymentProviderEpay     = "epay"
 	PaymentProviderEpusdt   = "epusdt"
+	PaymentProviderWallet   = "wallet"
 )
 
 // 支付渠道类型常量
@@ -47,6 +48,7 @@ const (
 	PaymentChannelTypeUsdtTrc20 = "usdt-trc20"
 	PaymentChannelTypeUsdcTrc20 = "usdc-trc20"
 	PaymentChannelTypeTrx       = "trx"
+	PaymentChannelTypeBalance   = "balance"
 )
 
 // 支付交互方式常量
@@ -55,6 +57,7 @@ const (
 	PaymentInteractionRedirect = "redirect"
 	PaymentInteractionWAP      = "wap"
 	PaymentInteractionPage     = "page"
+	PaymentInteractionBalance  = "balance"
 )
 
 // 钱包交易类型常量

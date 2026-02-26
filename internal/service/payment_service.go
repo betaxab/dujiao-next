@@ -242,7 +242,27 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 
 		onlineAmount := normalizeOrderAmount(lockedOrder.TotalAmount.Decimal.Sub(lockedOrder.WalletPaidAmount.Decimal))
 		if onlineAmount.LessThanOrEqual(decimal.Zero) {
-			if err := s.markOrderPaid(tx, &lockedOrder, time.Now()); err != nil {
+			walletPaidAmount := normalizeOrderAmount(lockedOrder.WalletPaidAmount.Decimal)
+			paidAt := time.Now()
+			payment = &models.Payment{
+				OrderID:         lockedOrder.ID,
+				ChannelID:       0,
+				ProviderType:    constants.PaymentProviderWallet,
+				ChannelType:     constants.PaymentChannelTypeBalance,
+				InteractionMode: constants.PaymentInteractionBalance,
+				Amount:          models.NewMoneyFromDecimal(walletPaidAmount),
+				FeeRate:         models.NewMoneyFromDecimal(decimal.Zero),
+				FeeAmount:       models.NewMoneyFromDecimal(decimal.Zero),
+				Currency:        lockedOrder.Currency,
+				Status:          constants.PaymentStatusSuccess,
+				CreatedAt:       paidAt,
+				UpdatedAt:       paidAt,
+				PaidAt:          &paidAt,
+			}
+			if err := paymentRepo.Create(payment); err != nil {
+				return ErrPaymentCreateFailed
+			}
+			if err := s.markOrderPaid(tx, &lockedOrder, paidAt); err != nil {
 				return err
 			}
 			orderPaidByWallet = true
@@ -316,6 +336,16 @@ func (s *PaymentService) CreatePayment(input CreatePaymentInput) (*CreatePayment
 	}
 
 	if orderPaidByWallet {
+		log.Infow("payment_create_wallet_success",
+			"payment_id", payment.ID,
+			"provider_type", payment.ProviderType,
+			"channel_type", payment.ChannelType,
+			"interaction_mode", payment.InteractionMode,
+			"currency", payment.Currency,
+			"amount", payment.Amount.String(),
+			"wallet_paid_amount", order.WalletPaidAmount.String(),
+			"online_pay_amount", order.OnlinePaidAmount.String(),
+		)
 		s.enqueueOrderPaidAsync(order, payment, log)
 		return &CreatePaymentResult{
 			Payment:          nil,
@@ -1924,8 +1954,8 @@ func (s *PaymentService) enqueueOrderPaidNotificationAsync(order *models.Order, 
 	}
 	// 钱包全额支付不会生成在线支付单，这里补充可读渠道标识，避免模板渲染为空。
 	if providerType == "" && order.WalletPaidAmount.Decimal.GreaterThan(decimal.Zero) {
-		providerType = "wallet"
-		channelType = "balance"
+		providerType = constants.PaymentProviderWallet
+		channelType = constants.PaymentChannelTypeBalance
 	}
 	if providerType != "" {
 		payload["provider_type"] = providerType
