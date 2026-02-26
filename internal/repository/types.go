@@ -108,6 +108,24 @@ type WalletTransactionListFilter struct {
 	CreatedTo   *time.Time
 }
 
+// WalletRechargeListFilter 查询钱包充值单列表的过滤条件
+type WalletRechargeListFilter struct {
+	Page         int
+	PageSize     int
+	RechargeNo   string
+	UserID       uint
+	UserKeyword  string
+	PaymentID    uint
+	ChannelID    uint
+	ProviderType string
+	ChannelType  string
+	Status       string
+	CreatedFrom  *time.Time
+	CreatedTo    *time.Time
+	PaidFrom     *time.Time
+	PaidTo       *time.Time
+}
+
 // UserLoginLogListFilter 查询用户登录日志列表的过滤条件
 type UserLoginLogListFilter struct {
 	Page        int

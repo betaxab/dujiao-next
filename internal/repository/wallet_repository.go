@@ -27,6 +27,8 @@ type WalletRepository interface {
 	GetRechargeOrderByPaymentID(paymentID uint) (*models.WalletRechargeOrder, error)
 	GetRechargeOrderByPaymentIDAndUser(paymentID uint, userID uint) (*models.WalletRechargeOrder, error)
 	GetRechargeOrderByPaymentIDForUpdate(paymentID uint) (*models.WalletRechargeOrder, error)
+	ListRechargeOrdersAdmin(filter WalletRechargeListFilter) ([]models.WalletRechargeOrder, int64, error)
+	GetRechargeOrdersByPaymentIDs(paymentIDs []uint) ([]models.WalletRechargeOrder, error)
 	WithTx(tx *gorm.DB) *GormWalletRepository
 }
 
@@ -260,4 +262,77 @@ func (r *GormWalletRepository) GetRechargeOrderByPaymentIDForUpdate(paymentID ui
 		return nil, err
 	}
 	return &order, nil
+}
+
+// ListRechargeOrdersAdmin 管理端分页查询充值支付单
+func (r *GormWalletRepository) ListRechargeOrdersAdmin(filter WalletRechargeListFilter) ([]models.WalletRechargeOrder, int64, error) {
+	query := r.db.Model(&models.WalletRechargeOrder{})
+
+	if filter.RechargeNo != "" {
+		query = query.Where("wallet_recharge_orders.recharge_no LIKE ?", "%"+filter.RechargeNo+"%")
+	}
+	if filter.UserID != 0 {
+		query = query.Where("wallet_recharge_orders.user_id = ?", filter.UserID)
+	}
+	if filter.UserKeyword != "" {
+		like := "%" + filter.UserKeyword + "%"
+		query = query.
+			Joins("LEFT JOIN users ON users.id = wallet_recharge_orders.user_id").
+			Where("(users.email LIKE ? OR users.display_name LIKE ?)", like, like)
+	}
+	if filter.PaymentID != 0 {
+		query = query.Where("wallet_recharge_orders.payment_id = ?", filter.PaymentID)
+	}
+	if filter.ChannelID != 0 {
+		query = query.Where("wallet_recharge_orders.channel_id = ?", filter.ChannelID)
+	}
+	if filter.ProviderType != "" {
+		query = query.Where("wallet_recharge_orders.provider_type = ?", filter.ProviderType)
+	}
+	if filter.ChannelType != "" {
+		query = query.Where("wallet_recharge_orders.channel_type = ?", filter.ChannelType)
+	}
+	if filter.Status != "" {
+		query = query.Where("wallet_recharge_orders.status = ?", filter.Status)
+	}
+	if filter.CreatedFrom != nil {
+		query = query.Where("wallet_recharge_orders.created_at >= ?", *filter.CreatedFrom)
+	}
+	if filter.CreatedTo != nil {
+		query = query.Where("wallet_recharge_orders.created_at <= ?", *filter.CreatedTo)
+	}
+	if filter.PaidFrom != nil {
+		query = query.Where("wallet_recharge_orders.paid_at >= ?", *filter.PaidFrom)
+	}
+	if filter.PaidTo != nil {
+		query = query.Where("wallet_recharge_orders.paid_at <= ?", *filter.PaidTo)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if filter.PageSize > 0 {
+		offset := (filter.Page - 1) * filter.PageSize
+		query = query.Limit(filter.PageSize).Offset(offset)
+	}
+
+	var orders []models.WalletRechargeOrder
+	if err := query.Order("wallet_recharge_orders.id DESC").Find(&orders).Error; err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
+}
+
+// GetRechargeOrdersByPaymentIDs 按支付ID批量查询充值支付单
+func (r *GormWalletRepository) GetRechargeOrdersByPaymentIDs(paymentIDs []uint) ([]models.WalletRechargeOrder, error) {
+	if len(paymentIDs) == 0 {
+		return []models.WalletRechargeOrder{}, nil
+	}
+	var orders []models.WalletRechargeOrder
+	if err := r.db.Where("payment_id IN ?", paymentIDs).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	return orders, nil
 }

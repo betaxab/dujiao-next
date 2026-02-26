@@ -29,6 +29,19 @@ type AdminRefundOrderToWalletRequest struct {
 	Remark string `json:"remark"`
 }
 
+type adminWalletRechargeUser struct {
+	ID          uint   `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+}
+
+type adminWalletRechargeItem struct {
+	models.WalletRechargeOrder
+	User          *adminWalletRechargeUser `json:"user,omitempty"`
+	ChannelName   string                   `json:"channel_name,omitempty"`
+	PaymentStatus string                   `json:"payment_status,omitempty"`
+}
+
 // GetAdminUserWallet 管理端获取用户钱包信息
 func (h *Handler) GetAdminUserWallet(c *gin.Context) {
 	userID, ok := parsePathUint(c, "id")
@@ -86,6 +99,158 @@ func (h *Handler) GetAdminUserWalletTransactions(c *gin.Context) {
 		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
 	}
 	response.SuccessWithPage(c, transactions, pagination)
+}
+
+// GetAdminWalletRecharges 管理端分页获取钱包充值记录
+func (h *Handler) GetAdminWalletRecharges(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = normalizePagination(page, pageSize)
+
+	userID, err := parseQueryUint(c.Query("user_id"))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	paymentID, err := parseQueryUint(c.Query("payment_id"))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	channelID, err := parseQueryUint(c.Query("channel_id"))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	createdFrom, err := parseTimeNullable(strings.TrimSpace(c.Query("created_from")))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	createdTo, err := parseTimeNullable(strings.TrimSpace(c.Query("created_to")))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	paidFrom, err := parseTimeNullable(strings.TrimSpace(c.Query("paid_from")))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+	paidTo, err := parseTimeNullable(strings.TrimSpace(c.Query("paid_to")))
+	if err != nil {
+		respondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+
+	recharges, total, err := h.WalletService.ListRechargeOrdersAdmin(repository.WalletRechargeListFilter{
+		Page:         page,
+		PageSize:     pageSize,
+		RechargeNo:   strings.TrimSpace(c.Query("recharge_no")),
+		UserID:       userID,
+		UserKeyword:  strings.TrimSpace(c.Query("user_keyword")),
+		PaymentID:    paymentID,
+		ChannelID:    channelID,
+		ProviderType: strings.TrimSpace(strings.ToLower(c.Query("provider_type"))),
+		ChannelType:  strings.TrimSpace(strings.ToLower(c.Query("channel_type"))),
+		Status:       strings.TrimSpace(strings.ToLower(c.Query("status"))),
+		CreatedFrom:  createdFrom,
+		CreatedTo:    createdTo,
+		PaidFrom:     paidFrom,
+		PaidTo:       paidTo,
+	})
+	if err != nil {
+		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
+		return
+	}
+
+	userIDs := make([]uint, 0, len(recharges))
+	channelIDs := make([]uint, 0, len(recharges))
+	paymentIDs := make([]uint, 0, len(recharges))
+	seenUsers := make(map[uint]struct{})
+	seenChannels := make(map[uint]struct{})
+	seenPayments := make(map[uint]struct{})
+	for _, recharge := range recharges {
+		if recharge.UserID != 0 {
+			if _, ok := seenUsers[recharge.UserID]; !ok {
+				seenUsers[recharge.UserID] = struct{}{}
+				userIDs = append(userIDs, recharge.UserID)
+			}
+		}
+		if recharge.ChannelID != 0 {
+			if _, ok := seenChannels[recharge.ChannelID]; !ok {
+				seenChannels[recharge.ChannelID] = struct{}{}
+				channelIDs = append(channelIDs, recharge.ChannelID)
+			}
+		}
+		if recharge.PaymentID != 0 {
+			if _, ok := seenPayments[recharge.PaymentID]; !ok {
+				seenPayments[recharge.PaymentID] = struct{}{}
+				paymentIDs = append(paymentIDs, recharge.PaymentID)
+			}
+		}
+	}
+
+	userMap := make(map[uint]models.User, len(userIDs))
+	if len(userIDs) > 0 {
+		users, userErr := h.UserRepo.ListByIDs(userIDs)
+		if userErr != nil {
+			respondError(c, response.CodeInternal, "error.user_fetch_failed", userErr)
+			return
+		}
+		for _, user := range users {
+			userMap[user.ID] = user
+		}
+	}
+
+	channelNameMap := make(map[uint]string, len(channelIDs))
+	if len(channelIDs) > 0 {
+		channels, channelErr := h.PaymentChannelRepo.ListByIDs(channelIDs)
+		if channelErr != nil {
+			respondError(c, response.CodeInternal, "error.payment_fetch_failed", channelErr)
+			return
+		}
+		for _, channel := range channels {
+			channelNameMap[channel.ID] = channel.Name
+		}
+	}
+
+	paymentStatusMap := make(map[uint]string, len(paymentIDs))
+	if len(paymentIDs) > 0 {
+		payments, paymentErr := h.PaymentRepo.GetByIDs(paymentIDs)
+		if paymentErr != nil {
+			respondError(c, response.CodeInternal, "error.payment_fetch_failed", paymentErr)
+			return
+		}
+		for _, payment := range payments {
+			paymentStatusMap[payment.ID] = payment.Status
+		}
+	}
+
+	items := make([]adminWalletRechargeItem, 0, len(recharges))
+	for _, recharge := range recharges {
+		item := adminWalletRechargeItem{
+			WalletRechargeOrder: recharge,
+			ChannelName:         channelNameMap[recharge.ChannelID],
+			PaymentStatus:       paymentStatusMap[recharge.PaymentID],
+		}
+		if user, ok := userMap[recharge.UserID]; ok {
+			item.User = &adminWalletRechargeUser{
+				ID:          user.ID,
+				Email:       user.Email,
+				DisplayName: user.DisplayName,
+			}
+		}
+		items = append(items, item)
+	}
+
+	pagination := response.Pagination{
+		Page:      page,
+		PageSize:  pageSize,
+		Total:     total,
+		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
+	}
+	response.SuccessWithPage(c, items, pagination)
 }
 
 // AdjustAdminUserWallet 管理端增减用户余额
@@ -205,4 +370,16 @@ func parsePathUint(c *gin.Context, key string) (uint, bool) {
 		return 0, false
 	}
 	return uint(parsed), true
+}
+
+func parseQueryUint(raw string) (uint, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseUint(trimmed, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(parsed), nil
 }

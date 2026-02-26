@@ -81,6 +81,11 @@ func (s *WalletService) ListTransactions(filter repository.WalletTransactionList
 	return s.walletRepo.ListTransactions(filter)
 }
 
+// ListRechargeOrdersAdmin 管理端查询充值支付单
+func (s *WalletService) ListRechargeOrdersAdmin(filter repository.WalletRechargeListFilter) ([]models.WalletRechargeOrder, int64, error) {
+	return s.walletRepo.ListRechargeOrdersAdmin(filter)
+}
+
 // GetRechargeOrderByRechargeNo 按充值单号查询当前用户充值单
 func (s *WalletService) GetRechargeOrderByRechargeNo(userID uint, rechargeNo string) (*models.WalletRechargeOrder, error) {
 	if userID == 0 {

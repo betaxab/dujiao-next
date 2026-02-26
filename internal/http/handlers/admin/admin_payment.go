@@ -21,7 +21,10 @@ import (
 // AdminPaymentItem 支付记录返回
 type AdminPaymentItem struct {
 	models.Payment
-	ChannelName string `json:"channel_name"`
+	ChannelName    string `json:"channel_name"`
+	RechargeNo     string `json:"recharge_no,omitempty"`
+	RechargeStatus string `json:"recharge_status,omitempty"`
+	RechargeUserID uint   `json:"recharge_user_id,omitempty"`
 }
 
 // GetAdminPayments 获取支付记录列表
@@ -104,12 +107,21 @@ func (h *Handler) GetAdminPayments(c *gin.Context) {
 		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
 		return
 	}
+	rechargeMetaMap, err := h.resolvePaymentRechargeMeta(payments)
+	if err != nil {
+		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
+		return
+	}
 
 	items := make([]AdminPaymentItem, 0, len(payments))
 	for _, payment := range payments {
+		rechargeMeta := rechargeMetaMap[payment.ID]
 		items = append(items, AdminPaymentItem{
-			Payment:     payment,
-			ChannelName: channelNameMap[payment.ChannelID],
+			Payment:        payment,
+			ChannelName:    channelNameMap[payment.ChannelID],
+			RechargeNo:     rechargeMeta.RechargeNo,
+			RechargeStatus: rechargeMeta.Status,
+			RechargeUserID: rechargeMeta.UserID,
 		})
 	}
 
@@ -182,9 +194,17 @@ func (h *Handler) ExportAdminPayments(c *gin.Context) {
 
 	buffer := &bytes.Buffer{}
 	writer := csv.NewWriter(buffer)
+	rechargeMetaMap, err := h.resolvePaymentRechargeMeta(payments)
+	if err != nil {
+		respondError(c, response.CodeInternal, "error.payment_export_failed", err)
+		return
+	}
 	if err := writer.Write([]string{
 		"id",
 		"order_id",
+		"recharge_no",
+		"recharge_status",
+		"recharge_user_id",
 		"channel_id",
 		"provider_type",
 		"channel_type",
@@ -201,9 +221,13 @@ func (h *Handler) ExportAdminPayments(c *gin.Context) {
 	}
 
 	for _, payment := range payments {
+		rechargeMeta := rechargeMetaMap[payment.ID]
 		record := []string{
 			strconv.FormatUint(uint64(payment.ID), 10),
 			strconv.FormatUint(uint64(payment.OrderID), 10),
+			rechargeMeta.RechargeNo,
+			rechargeMeta.Status,
+			strconv.FormatUint(uint64(rechargeMeta.UserID), 10),
 			strconv.FormatUint(uint64(payment.ChannelID), 10),
 			payment.ProviderType,
 			payment.ChannelType,
@@ -256,9 +280,18 @@ func (h *Handler) GetAdminPayment(c *gin.Context) {
 		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
 		return
 	}
+	rechargeMetaMap, err := h.resolvePaymentRechargeMeta([]models.Payment{*payment})
+	if err != nil {
+		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
+		return
+	}
+	rechargeMeta := rechargeMetaMap[payment.ID]
 	response.Success(c, AdminPaymentItem{
-		Payment:     *payment,
-		ChannelName: channelNameMap[payment.ChannelID],
+		Payment:        *payment,
+		ChannelName:    channelNameMap[payment.ChannelID],
+		RechargeNo:     rechargeMeta.RechargeNo,
+		RechargeStatus: rechargeMeta.Status,
+		RechargeUserID: rechargeMeta.UserID,
 	})
 }
 
@@ -292,6 +325,43 @@ func (h *Handler) resolvePaymentChannelNames(payments []models.Payment) (map[uin
 	}
 	for _, channel := range channels {
 		result[channel.ID] = channel.Name
+	}
+	return result, nil
+}
+
+type paymentRechargeMeta struct {
+	RechargeNo string
+	Status     string
+	UserID     uint
+}
+
+func (h *Handler) resolvePaymentRechargeMeta(payments []models.Payment) (map[uint]paymentRechargeMeta, error) {
+	paymentIDs := make([]uint, 0, len(payments))
+	seen := make(map[uint]struct{})
+	for _, payment := range payments {
+		if payment.ID == 0 {
+			continue
+		}
+		if _, ok := seen[payment.ID]; ok {
+			continue
+		}
+		seen[payment.ID] = struct{}{}
+		paymentIDs = append(paymentIDs, payment.ID)
+	}
+	result := make(map[uint]paymentRechargeMeta)
+	if len(paymentIDs) == 0 || h.WalletRepo == nil {
+		return result, nil
+	}
+	orders, err := h.WalletRepo.GetRechargeOrdersByPaymentIDs(paymentIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, order := range orders {
+		result[order.PaymentID] = paymentRechargeMeta{
+			RechargeNo: strings.TrimSpace(order.RechargeNo),
+			Status:     strings.TrimSpace(order.Status),
+			UserID:     order.UserID,
+		}
 	}
 	return result, nil
 }

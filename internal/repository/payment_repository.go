@@ -16,6 +16,7 @@ type PaymentRepository interface {
 	Create(payment *models.Payment) error
 	Update(payment *models.Payment) error
 	GetByID(id uint) (*models.Payment, error)
+	GetByIDs(ids []uint) ([]models.Payment, error)
 	GetLatestByProviderRef(providerRef string) (*models.Payment, error)
 	ListByOrderID(orderID uint) ([]models.Payment, error)
 	GetLatestPendingByOrder(orderID uint, now time.Time) (*models.Payment, error)
@@ -62,6 +63,18 @@ func (r *GormPaymentRepository) GetByID(id uint) (*models.Payment, error) {
 		return nil, err
 	}
 	return &payment, nil
+}
+
+// GetByIDs 根据 ID 列表获取支付记录
+func (r *GormPaymentRepository) GetByIDs(ids []uint) ([]models.Payment, error) {
+	if len(ids) == 0 {
+		return []models.Payment{}, nil
+	}
+	var payments []models.Payment
+	if err := r.db.Where("id IN ?", ids).Find(&payments).Error; err != nil {
+		return nil, err
+	}
+	return payments, nil
 }
 
 // GetLatestByProviderRef 根据第三方流水号获取最新支付记录
@@ -130,7 +143,10 @@ func (r *GormPaymentRepository) ListAdmin(filter PaymentListFilter) ([]models.Pa
 	query := r.db.Model(&models.Payment{})
 
 	if filter.UserID != 0 {
-		query = query.Joins("JOIN orders ON orders.id = payments.order_id").Where("orders.user_id = ?", filter.UserID)
+		query = query.
+			Joins("LEFT JOIN orders ON orders.id = payments.order_id").
+			Joins("LEFT JOIN wallet_recharge_orders ON wallet_recharge_orders.payment_id = payments.id").
+			Where("(orders.user_id = ? OR wallet_recharge_orders.user_id = ?)", filter.UserID, filter.UserID)
 	}
 	if filter.OrderID != 0 {
 		query = query.Where("payments.order_id = ?", filter.OrderID)

@@ -264,6 +264,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 				authorized.GET("/users/:id/wallet", adminHandler.GetAdminUserWallet)
 				authorized.GET("/users/:id/wallet/transactions", adminHandler.GetAdminUserWalletTransactions)
 				authorized.POST("/users/:id/wallet/adjust", adminHandler.AdjustAdminUserWallet)
+				authorized.GET("/wallet/recharges", adminHandler.GetAdminWalletRecharges)
 			}
 		}
 	}
