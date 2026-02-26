@@ -9,7 +9,7 @@ import (
 	"github.com/dujiao-next/internal/models"
 )
 
-var settingSupportedLanguages = []string{"zh-CN", "zh-TW", "en-US"}
+var settingSupportedLanguages = append([]string(nil), constants.SupportedLocales...)
 var settingCurrencyCodePattern = regexp.MustCompile(`^[A-Z]{3}$`)
 
 const (

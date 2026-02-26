@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dujiao-next/internal/constants"
+
 	"gorm.io/gorm"
 )
 
-var localizedJSONSearchKeys = []string{"zh-CN", "zh-TW", "en-US"}
+var localizedJSONSearchKeys = append([]string(nil), constants.SupportedLocales...)
 
 // dbDialectName 获取数据库方言名称，默认按 sqlite 处理。
 func dbDialectName(db *gorm.DB) string {

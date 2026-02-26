@@ -196,7 +196,7 @@ func (s *NotificationService) dispatchExceptionAlertCheck(ctx context.Context, s
 
 		itemPayload := payload
 		itemPayload.EventType = constants.NotificationEventExceptionAlert
-		itemPayload.BizType = "dashboard_alert"
+		itemPayload.BizType = constants.NotificationBizTypeDashboardAlert
 		itemPayload.Data = data
 		if err := s.dispatchSingleEvent(ctx, setting, itemPayload); err != nil && firstErr == nil {
 			firstErr = err
@@ -354,7 +354,7 @@ func resolveNotificationLocale(locale, fallback string) string {
 	if _, ok := notificationSupportedLocales[locale]; ok {
 		return locale
 	}
-	return "zh-CN"
+	return constants.LocaleZhCN
 }
 
 func composeTelegramMessage(title, body string) string {

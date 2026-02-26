@@ -40,7 +40,7 @@ type PublicProductView struct {
 func (h *Handler) GetConfig(c *gin.Context) {
 	// 默认配置
 	defaults := map[string]interface{}{
-		"languages":                        []string{"zh-CN", "zh-TW", "en-US"},
+		"languages":                        append([]string(nil), constants.SupportedLocales...),
 		constants.SettingFieldSiteCurrency: constants.SiteCurrencyDefault,
 		"contact": map[string]interface{}{
 			"telegram": "https://t.me/dujiaoka",

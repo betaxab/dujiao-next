@@ -249,6 +249,24 @@ const (
 	SiteCurrencyDefault = "CNY"
 )
 
+// 站点语言常量
+const (
+	LocaleZhCN = "zh-CN"
+	LocaleZhTW = "zh-TW"
+	LocaleEnUS = "en-US"
+)
+
+// 支持的站点语言顺序（含回退顺序）
+var SupportedLocales = []string{LocaleZhCN, LocaleZhTW, LocaleEnUS}
+
+// 通知业务类型常量
+const (
+	NotificationBizTypeOrder           = "order"
+	NotificationBizTypeWalletRecharge  = "wallet_recharge"
+	NotificationBizTypeDashboardAlert  = "dashboard_alert"
+	NotificationBizTypePaymentCallback = "payment_callback"
+)
+
 // 卡密批次来源常量
 const (
 	CardSecretSourceManual = "manual"

@@ -103,7 +103,7 @@ func (h *Handler) enqueuePaymentExceptionAlert(c *gin.Context, data models.JSON)
 		return
 	}
 	payload := models.JSON{
-		"source":      "payment_callback",
+		"source":      constants.NotificationBizTypePaymentCallback,
 		"method":      strings.TrimSpace(c.Request.Method),
 		"path":        strings.TrimSpace(c.Request.URL.Path),
 		"client_ip":   strings.TrimSpace(c.ClientIP()),
@@ -114,7 +114,7 @@ func (h *Handler) enqueuePaymentExceptionAlert(c *gin.Context, data models.JSON)
 	}
 	if err := h.NotificationService.Enqueue(service.NotificationEnqueueInput{
 		EventType: constants.NotificationEventExceptionAlert,
-		BizType:   "payment_callback",
+		BizType:   constants.NotificationBizTypePaymentCallback,
 		BizID:     0,
 		Data:      payload,
 	}); err != nil {

@@ -524,7 +524,7 @@ func (s *PaymentService) enqueueOrderPaidNotificationAsync(order *models.Order, 
 	}
 	if err := s.notificationSvc.Enqueue(NotificationEnqueueInput{
 		EventType: constants.NotificationEventOrderPaidSuccess,
-		BizType:   "order",
+		BizType:   constants.NotificationBizTypeOrder,
 		BizID:     order.ID,
 		Locale:    strings.TrimSpace(order.GuestLocale),
 		Data:      payload,
@@ -555,7 +555,7 @@ func (s *PaymentService) enqueueWalletRechargeSuccessAsync(recharge *models.Wall
 	}
 	if err := s.notificationSvc.Enqueue(NotificationEnqueueInput{
 		EventType: constants.NotificationEventWalletRechargeSuccess,
-		BizType:   "wallet_recharge",
+		BizType:   constants.NotificationBizTypeWalletRecharge,
 		BizID:     recharge.ID,
 		Data:      payload,
 	}); err != nil {
@@ -584,7 +584,7 @@ func (s *PaymentService) enqueueManualFulfillmentPendingAsync(order *models.Orde
 	}
 	if err := s.notificationSvc.Enqueue(NotificationEnqueueInput{
 		EventType: constants.NotificationEventManualFulfillmentPending,
-		BizType:   "order",
+		BizType:   constants.NotificationBizTypeOrder,
 		BizID:     order.ID,
 		Locale:    strings.TrimSpace(order.GuestLocale),
 		Data:      payload,
@@ -606,7 +606,7 @@ func (s *PaymentService) enqueueExceptionAlertCheckAsync(reason string, log *zap
 	}
 	if err := s.notificationSvc.Enqueue(NotificationEnqueueInput{
 		EventType: constants.NotificationEventExceptionAlertCheck,
-		BizType:   "dashboard_alert",
+		BizType:   constants.NotificationBizTypeDashboardAlert,
 		BizID:     0,
 		Data:      payload,
 	}); err != nil {

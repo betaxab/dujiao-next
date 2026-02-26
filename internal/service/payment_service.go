@@ -1159,7 +1159,7 @@ func pickOrderItemTitle(title models.JSON) string {
 	if title == nil {
 		return ""
 	}
-	for _, key := range []string{"zh-CN", "zh-TW", "en-US"} {
+	for _, key := range constants.SupportedLocales {
 		if val, ok := title[key]; ok {
 			if str, ok := val.(string); ok && strings.TrimSpace(str) != "" {
 				return strings.TrimSpace(str)

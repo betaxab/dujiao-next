@@ -11,9 +11,9 @@ import (
 )
 
 var notificationSupportedLocales = map[string]struct{}{
-	"zh-CN": {},
-	"zh-TW": {},
-	"en-US": {},
+	constants.LocaleZhCN: {},
+	constants.LocaleZhTW: {},
+	constants.LocaleEnUS: {},
 }
 
 var telegramChatIDPattern = regexp.MustCompile(`^-?\d{5,20}$`)
@@ -121,7 +121,7 @@ type NotificationLocalizedTemplatePatch struct {
 // NotificationCenterDefaultSetting 默认通知中心配置
 func NotificationCenterDefaultSetting() NotificationCenterSetting {
 	return NormalizeNotificationCenterSetting(NotificationCenterSetting{
-		DefaultLocale: "zh-CN",
+		DefaultLocale: constants.LocaleZhCN,
 		Channels: NotificationChannelsSetting{
 			Email: NotificationChannelSetting{
 				Enabled:    false,
@@ -402,9 +402,9 @@ func (s NotificationTemplatesSetting) TemplateByEvent(eventType string) Notifica
 func (s NotificationSceneTemplate) ResolveLocaleTemplate(locale string) NotificationLocalizedTemplate {
 	normalized := normalizeNotificationLocale(locale)
 	switch normalized {
-	case "zh-TW":
+	case constants.LocaleZhTW:
 		return s.ZHTW
-	case "en-US":
+	case constants.LocaleEnUS:
 		return s.ENUS
 	default:
 		return s.ZHCN
@@ -462,13 +462,13 @@ func notificationCenterSettingFromJSON(raw models.JSON, fallback NotificationCen
 
 func notificationSceneTemplateFromMap(raw map[string]interface{}, fallback NotificationSceneTemplate) NotificationSceneTemplate {
 	next := fallback
-	if zhCNMap := toStringAnyMap(raw["zh-CN"]); zhCNMap != nil {
+	if zhCNMap := toStringAnyMap(raw[constants.LocaleZhCN]); zhCNMap != nil {
 		next.ZHCN = notificationLocalizedTemplateFromMap(zhCNMap, next.ZHCN)
 	}
-	if zhTWMap := toStringAnyMap(raw["zh-TW"]); zhTWMap != nil {
+	if zhTWMap := toStringAnyMap(raw[constants.LocaleZhTW]); zhTWMap != nil {
 		next.ZHTW = notificationLocalizedTemplateFromMap(zhTWMap, next.ZHTW)
 	}
-	if enUSMap := toStringAnyMap(raw["en-US"]); enUSMap != nil {
+	if enUSMap := toStringAnyMap(raw[constants.LocaleEnUS]); enUSMap != nil {
 		next.ENUS = notificationLocalizedTemplateFromMap(enUSMap, next.ENUS)
 	}
 	return next
@@ -483,15 +483,15 @@ func notificationLocalizedTemplateFromMap(raw map[string]interface{}, fallback N
 
 func notificationSceneTemplateToMap(template NotificationSceneTemplate) map[string]interface{} {
 	return map[string]interface{}{
-		"zh-CN": map[string]interface{}{
+		constants.LocaleZhCN: map[string]interface{}{
 			"title": strings.TrimSpace(template.ZHCN.Title),
 			"body":  strings.TrimSpace(template.ZHCN.Body),
 		},
-		"zh-TW": map[string]interface{}{
+		constants.LocaleZhTW: map[string]interface{}{
 			"title": strings.TrimSpace(template.ZHTW.Title),
 			"body":  strings.TrimSpace(template.ZHTW.Body),
 		},
-		"en-US": map[string]interface{}{
+		constants.LocaleEnUS: map[string]interface{}{
 			"title": strings.TrimSpace(template.ENUS.Title),
 			"body":  strings.TrimSpace(template.ENUS.Body),
 		},
@@ -524,7 +524,7 @@ func normalizeNotificationLocale(locale string) string {
 	if _, ok := notificationSupportedLocales[normalized]; ok {
 		return normalized
 	}
-	return "zh-CN"
+	return constants.LocaleZhCN
 }
 
 func normalizeNotificationDedupeTTL(ttl int) int {

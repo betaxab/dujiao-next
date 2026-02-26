@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dujiao-next/internal/constants"
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	LocaleZH = "zh-CN"
-	LocaleTW = "zh-TW"
-	LocaleEN = "en-US"
+	LocaleZH = constants.LocaleZhCN
+	LocaleTW = constants.LocaleZhTW
+	LocaleEN = constants.LocaleEnUS
 )
 
 var messages = map[string]map[string]string{

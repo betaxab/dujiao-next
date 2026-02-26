@@ -213,7 +213,7 @@ func normalizeBannerLinkType(raw string) string {
 
 func normalizeMultiLangJSON(raw map[string]interface{}) models.JSON {
 	result := models.JSON{}
-	for _, key := range []string{"zh-CN", "zh-TW", "en-US"} {
+	for _, key := range constants.SupportedLocales {
 		value, ok := raw[key]
 		if !ok {
 			result[key] = ""
