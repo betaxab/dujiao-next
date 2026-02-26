@@ -180,11 +180,6 @@ func (h *Handler) GetAdminPromotions(c *gin.Context) {
 		return
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, promotions, pagination)
 }

@@ -92,12 +92,7 @@ func (h *Handler) GetAdminUserWalletTransactions(c *gin.Context) {
 		respondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, transactions, pagination)
 }
 
@@ -244,12 +239,7 @@ func (h *Handler) GetAdminWalletRecharges(c *gin.Context) {
 		items = append(items, item)
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, items, pagination)
 }
 

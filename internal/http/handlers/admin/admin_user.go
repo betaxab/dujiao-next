@@ -134,12 +134,7 @@ func (h *Handler) GetAdminUsers(c *gin.Context) {
 		})
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, items, pagination)
 }
 
@@ -381,12 +376,7 @@ func (h *Handler) GetAdminUserCouponUsages(c *gin.Context) {
 		result = append(result, item)
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, result, pagination)
 }
 

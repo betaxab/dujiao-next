@@ -288,30 +288,7 @@ func (h *Handler) PaypalWebhook(c *gin.Context) {
 			"message":     strings.TrimSpace(err.Error()),
 			"provider":    constants.PaymentChannelTypePaypal,
 		})
-		switch {
-		case errors.Is(err, service.ErrPaymentInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
-		case errors.Is(err, service.ErrPaymentNotFound):
-			respondError(c, response.CodeNotFound, "error.payment_not_found", nil)
-		case errors.Is(err, service.ErrPaymentStatusInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_status_invalid", nil)
-		case errors.Is(err, service.ErrPaymentAmountMismatch):
-			respondError(c, response.CodeBadRequest, "error.payment_amount_mismatch", nil)
-		case errors.Is(err, service.ErrPaymentCurrencyMismatch):
-			respondError(c, response.CodeBadRequest, "error.payment_currency_mismatch", nil)
-		case errors.Is(err, service.ErrPaymentChannelNotFound):
-			respondError(c, response.CodeNotFound, "error.payment_channel_not_found", nil)
-		case errors.Is(err, service.ErrPaymentProviderNotSupported):
-			respondError(c, response.CodeBadRequest, "error.payment_provider_not_supported", nil)
-		case errors.Is(err, service.ErrPaymentChannelConfigInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_channel_config_invalid", nil)
-		case errors.Is(err, service.ErrPaymentGatewayRequestFailed):
-			respondError(c, response.CodeBadRequest, "error.payment_gateway_request_failed", nil)
-		case errors.Is(err, service.ErrPaymentGatewayResponseInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_gateway_response_invalid", nil)
-		default:
-			respondError(c, response.CodeInternal, "error.payment_callback_failed", err)
-		}
+		respondPaymentCallbackError(c, err)
 		return
 	}
 
@@ -388,30 +365,7 @@ func (h *Handler) StripeWebhook(c *gin.Context) {
 			"message":     strings.TrimSpace(err.Error()),
 			"provider":    constants.PaymentChannelTypeStripe,
 		})
-		switch {
-		case errors.Is(err, service.ErrPaymentInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
-		case errors.Is(err, service.ErrPaymentNotFound):
-			respondError(c, response.CodeNotFound, "error.payment_not_found", nil)
-		case errors.Is(err, service.ErrPaymentStatusInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_status_invalid", nil)
-		case errors.Is(err, service.ErrPaymentAmountMismatch):
-			respondError(c, response.CodeBadRequest, "error.payment_amount_mismatch", nil)
-		case errors.Is(err, service.ErrPaymentCurrencyMismatch):
-			respondError(c, response.CodeBadRequest, "error.payment_currency_mismatch", nil)
-		case errors.Is(err, service.ErrPaymentChannelNotFound):
-			respondError(c, response.CodeNotFound, "error.payment_channel_not_found", nil)
-		case errors.Is(err, service.ErrPaymentProviderNotSupported):
-			respondError(c, response.CodeBadRequest, "error.payment_provider_not_supported", nil)
-		case errors.Is(err, service.ErrPaymentChannelConfigInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_channel_config_invalid", nil)
-		case errors.Is(err, service.ErrPaymentGatewayRequestFailed):
-			respondError(c, response.CodeBadRequest, "error.payment_gateway_request_failed", nil)
-		case errors.Is(err, service.ErrPaymentGatewayResponseInvalid):
-			respondError(c, response.CodeBadRequest, "error.payment_gateway_response_invalid", nil)
-		default:
-			respondError(c, response.CodeInternal, "error.payment_callback_failed", err)
-		}
+		respondPaymentCallbackError(c, err)
 		return
 	}
 
@@ -1122,61 +1076,11 @@ func (h *Handler) enqueuePaymentExceptionAlert(c *gin.Context, data models.JSON)
 }
 
 func respondPaymentCreateError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, service.ErrPaymentInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
-	case errors.Is(err, service.ErrOrderNotFound):
-		respondError(c, response.CodeNotFound, "error.order_not_found", nil)
-	case errors.Is(err, service.ErrOrderStatusInvalid):
-		respondError(c, response.CodeBadRequest, "error.order_status_invalid", nil)
-	case errors.Is(err, service.ErrPaymentChannelNotFound):
-		respondError(c, response.CodeNotFound, "error.payment_channel_not_found", nil)
-	case errors.Is(err, service.ErrPaymentChannelInactive):
-		respondError(c, response.CodeBadRequest, "error.payment_channel_inactive", nil)
-	case errors.Is(err, service.ErrPaymentProviderNotSupported):
-		respondError(c, response.CodeBadRequest, "error.payment_provider_not_supported", nil)
-	case errors.Is(err, service.ErrPaymentChannelConfigInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_channel_config_invalid", nil)
-	case errors.Is(err, service.ErrPaymentGatewayRequestFailed):
-		respondError(c, response.CodeBadRequest, "error.payment_gateway_request_failed", nil)
-	case errors.Is(err, service.ErrPaymentGatewayResponseInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_gateway_response_invalid", nil)
-	case errors.Is(err, service.ErrPaymentCurrencyMismatch):
-		respondError(c, response.CodeBadRequest, "error.payment_currency_mismatch", nil)
-	case errors.Is(err, service.ErrWalletNotSupportedForGuest):
-		respondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
-	default:
-		respondError(c, response.CodeInternal, "error.payment_create_failed", err)
-	}
+	respondWithMappedError(c, err, paymentCreateErrorRules, response.CodeInternal, "error.payment_create_failed")
 }
 
 func respondPaymentCaptureError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, service.ErrPaymentInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_invalid", nil)
-	case errors.Is(err, service.ErrPaymentNotFound):
-		respondError(c, response.CodeNotFound, "error.payment_not_found", nil)
-	case errors.Is(err, service.ErrPaymentChannelNotFound):
-		respondError(c, response.CodeNotFound, "error.payment_channel_not_found", nil)
-	case errors.Is(err, service.ErrPaymentProviderNotSupported):
-		respondError(c, response.CodeBadRequest, "error.payment_provider_not_supported", nil)
-	case errors.Is(err, service.ErrPaymentChannelConfigInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_channel_config_invalid", nil)
-	case errors.Is(err, service.ErrPaymentGatewayRequestFailed):
-		respondError(c, response.CodeBadRequest, "error.payment_gateway_request_failed", nil)
-	case errors.Is(err, service.ErrPaymentGatewayResponseInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_gateway_response_invalid", nil)
-	case errors.Is(err, service.ErrPaymentStatusInvalid):
-		respondError(c, response.CodeBadRequest, "error.payment_status_invalid", nil)
-	case errors.Is(err, service.ErrPaymentAmountMismatch):
-		respondError(c, response.CodeBadRequest, "error.payment_amount_mismatch", nil)
-	case errors.Is(err, service.ErrPaymentCurrencyMismatch):
-		respondError(c, response.CodeBadRequest, "error.payment_currency_mismatch", nil)
-	case errors.Is(err, service.ErrOrderNotFound):
-		respondError(c, response.CodeNotFound, "error.order_not_found", nil)
-	default:
-		respondError(c, response.CodeInternal, "error.payment_callback_failed", err)
-	}
+	respondWithMappedError(c, err, paymentCaptureErrorRules, response.CodeInternal, "error.payment_callback_failed")
 }
 
 // HandleEpusdtCallback 处理 BEpusdt 回调

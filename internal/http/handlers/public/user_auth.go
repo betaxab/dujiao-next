@@ -38,7 +38,7 @@ func (h *Handler) SendUserVerifyCode(c *gin.Context) {
 		captchaScene = constants.CaptchaSceneResetSendCode
 	}
 	if captchaScene != "" && h.CaptchaService != nil {
-		if captchaErr := h.CaptchaService.Verify(captchaScene, req.CaptchaPayload.toServicePayload(), c.ClientIP()); captchaErr != nil {
+		if captchaErr := h.CaptchaService.Verify(captchaScene, req.CaptchaPayload.ToServicePayload(), c.ClientIP()); captchaErr != nil {
 			switch {
 			case errors.Is(captchaErr, service.ErrCaptchaRequired):
 				respondError(c, response.CodeBadRequest, "error.captcha_required", nil)
@@ -161,7 +161,7 @@ func (h *Handler) UserLogin(c *gin.Context) {
 	}
 
 	if h.CaptchaService != nil {
-		if captchaErr := h.CaptchaService.Verify(constants.CaptchaSceneLogin, req.CaptchaPayload.toServicePayload(), c.ClientIP()); captchaErr != nil {
+		if captchaErr := h.CaptchaService.Verify(constants.CaptchaSceneLogin, req.CaptchaPayload.ToServicePayload(), c.ClientIP()); captchaErr != nil {
 			switch {
 			case errors.Is(captchaErr, service.ErrCaptchaRequired):
 				h.recordUserLogin(c, req.Email, 0, constants.LoginLogStatusFailed, constants.LoginLogFailReasonCaptchaRequired, constants.LoginLogSourceWeb)

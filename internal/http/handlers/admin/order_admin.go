@@ -75,12 +75,7 @@ func (h *Handler) AdminListOrders(c *gin.Context) {
 		return
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	userMap := map[uint]models.User{}
 	userIDs := make([]uint, 0, len(orders))
 	seen := map[uint]struct{}{}

@@ -116,10 +116,7 @@ func (r *GormWalletRepository) ListAccounts(filter WalletAccountListFilter) ([]m
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var accounts []models.WalletAccount
 	if err := query.Order("id desc").Find(&accounts).Error; err != nil {
@@ -176,10 +173,7 @@ func (r *GormWalletRepository) ListTransactions(filter WalletTransactionListFilt
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var txns []models.WalletTransaction
 	if err := query.Order("id desc").Find(&txns).Error; err != nil {
@@ -313,10 +307,7 @@ func (r *GormWalletRepository) ListRechargeOrdersAdmin(filter WalletRechargeList
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var orders []models.WalletRechargeOrder
 	if err := query.Order("wallet_recharge_orders.id DESC").Find(&orders).Error; err != nil {

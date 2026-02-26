@@ -30,7 +30,7 @@ func (h *Handler) RedeemGiftCard(c *gin.Context) {
 	}
 
 	if h.CaptchaService != nil {
-		if captchaErr := h.CaptchaService.Verify(constants.CaptchaSceneGiftCardRedeem, req.CaptchaPayload.toServicePayload(), c.ClientIP()); captchaErr != nil {
+		if captchaErr := h.CaptchaService.Verify(constants.CaptchaSceneGiftCardRedeem, req.CaptchaPayload.ToServicePayload(), c.ClientIP()); captchaErr != nil {
 			switch {
 			case errors.Is(captchaErr, service.ErrCaptchaRequired):
 				respondError(c, response.CodeBadRequest, "error.captcha_required", nil)

@@ -58,10 +58,7 @@ func (r *GormBannerRepository) List(filter BannerListFilter) ([]models.Banner, i
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	orderBy := filter.OrderBy
 	if orderBy == "" {

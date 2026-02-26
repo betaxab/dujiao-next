@@ -96,12 +96,7 @@ func (h *Handler) GetAdminPayments(c *gin.Context) {
 		return
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	channelNameMap, err := h.resolvePaymentChannelNames(payments)
 	if err != nil {
 		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)

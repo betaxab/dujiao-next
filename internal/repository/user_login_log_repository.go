@@ -60,10 +60,7 @@ func (r *GormUserLoginLogRepository) ListAdmin(filter UserLoginLogListFilter) ([
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var logs []models.UserLoginLog
 	if err := query.Order("id desc").Find(&logs).Error; err != nil {

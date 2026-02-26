@@ -29,6 +29,28 @@ type Pagination struct {
 	TotalPage int64 `json:"total_page"`
 }
 
+// NormalizePage 归一化分页参数，避免非法页码与除零风险。
+func NormalizePage(page, pageSize int) (int, int) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	return page, pageSize
+}
+
+// BuildPagination 构造分页响应对象。
+func BuildPagination(page, pageSize int, total int64) Pagination {
+	page, pageSize = NormalizePage(page, pageSize)
+	return Pagination{
+		Page:      page,
+		PageSize:  pageSize,
+		Total:     total,
+		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
+	}
+}
+
 // Success 成功响应
 func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{

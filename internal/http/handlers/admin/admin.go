@@ -37,12 +37,7 @@ func (h *Handler) GetAdminProducts(c *gin.Context) {
 		return
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, products, pagination)
 }
 
@@ -88,12 +83,7 @@ func (h *Handler) GetAdminPosts(c *gin.Context) {
 		return
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, posts, pagination)
 }
 
@@ -131,7 +121,7 @@ func (h *Handler) AdminLogin(c *gin.Context) {
 	}
 
 	if h.CaptchaService != nil {
-		if captchaErr := h.CaptchaService.Verify(constants.CaptchaSceneLogin, req.CaptchaPayload.toServicePayload(), c.ClientIP()); captchaErr != nil {
+		if captchaErr := h.CaptchaService.Verify(constants.CaptchaSceneLogin, req.CaptchaPayload.ToServicePayload(), c.ClientIP()); captchaErr != nil {
 			switch {
 			case errors.Is(captchaErr, service.ErrCaptchaRequired):
 				respondError(c, response.CodeBadRequest, "error.captcha_required", nil)

@@ -175,10 +175,7 @@ func (r *GormPaymentRepository) ListAdmin(filter PaymentListFilter) ([]models.Pa
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var payments []models.Payment
 	if err := query.Order("payments.id desc").Find(&payments).Error; err != nil {

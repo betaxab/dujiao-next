@@ -59,62 +59,7 @@ func (h *Handler) PreviewOrder(c *gin.Context) {
 		ManualFormData: req.ManualFormData,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrProductSKURequired):
-			respondError(c, response.CodeBadRequest, "error.order_item_invalid", nil)
-		case errors.Is(err, service.ErrProductSKUInvalid):
-			respondError(c, response.CodeBadRequest, "error.order_item_invalid", nil)
-		case errors.Is(err, service.ErrInvalidOrderItem):
-			respondError(c, response.CodeBadRequest, "error.order_item_invalid", nil)
-		case errors.Is(err, service.ErrInvalidOrderAmount):
-			respondError(c, response.CodeBadRequest, "error.order_amount_invalid", nil)
-		case errors.Is(err, service.ErrProductPurchaseNotAllowed):
-			respondError(c, response.CodeBadRequest, "error.product_purchase_not_allowed", nil)
-		case errors.Is(err, service.ErrManualStockInsufficient):
-			respondError(c, response.CodeBadRequest, "error.manual_stock_insufficient", nil)
-		case errors.Is(err, service.ErrCardSecretInsufficient):
-			respondError(c, response.CodeBadRequest, "error.card_secret_insufficient", nil)
-		case errors.Is(err, service.ErrOrderCurrencyMismatch):
-			respondError(c, response.CodeBadRequest, "error.order_currency_mismatch", nil)
-		case errors.Is(err, service.ErrProductPriceInvalid):
-			respondError(c, response.CodeBadRequest, "error.product_price_invalid", nil)
-		case errors.Is(err, service.ErrProductNotAvailable):
-			respondError(c, response.CodeBadRequest, "error.product_not_available", nil)
-		case errors.Is(err, service.ErrCouponInvalid):
-			respondError(c, response.CodeBadRequest, "error.coupon_invalid", nil)
-		case errors.Is(err, service.ErrCouponNotFound):
-			respondError(c, response.CodeBadRequest, "error.coupon_not_found", nil)
-		case errors.Is(err, service.ErrCouponInactive):
-			respondError(c, response.CodeBadRequest, "error.coupon_inactive", nil)
-		case errors.Is(err, service.ErrCouponNotStarted):
-			respondError(c, response.CodeBadRequest, "error.coupon_not_started", nil)
-		case errors.Is(err, service.ErrCouponExpired):
-			respondError(c, response.CodeBadRequest, "error.coupon_expired", nil)
-		case errors.Is(err, service.ErrCouponUsageLimit):
-			respondError(c, response.CodeBadRequest, "error.coupon_usage_limit", nil)
-		case errors.Is(err, service.ErrCouponPerUserLimit):
-			respondError(c, response.CodeBadRequest, "error.coupon_per_user_limit", nil)
-		case errors.Is(err, service.ErrCouponMinAmount):
-			respondError(c, response.CodeBadRequest, "error.coupon_min_amount", nil)
-		case errors.Is(err, service.ErrCouponScopeInvalid):
-			respondError(c, response.CodeBadRequest, "error.coupon_scope_invalid", nil)
-		case errors.Is(err, service.ErrPromotionInvalid):
-			respondError(c, response.CodeBadRequest, "error.promotion_invalid", nil)
-		case errors.Is(err, service.ErrQueueUnavailable):
-			respondError(c, response.CodeInternal, "error.queue_unavailable", nil)
-		case errors.Is(err, service.ErrManualFormSchemaInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_schema_invalid", nil)
-		case errors.Is(err, service.ErrManualFormRequiredMissing):
-			respondError(c, response.CodeBadRequest, "error.manual_form_required_missing", nil)
-		case errors.Is(err, service.ErrManualFormFieldInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_field_invalid", nil)
-		case errors.Is(err, service.ErrManualFormTypeInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_type_invalid", nil)
-		case errors.Is(err, service.ErrManualFormOptionInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_option_invalid", nil)
-		default:
-			respondError(c, response.CodeInternal, "error.order_create_failed", err)
-		}
+		respondUserOrderPreviewError(c, err)
 		return
 	}
 
@@ -152,60 +97,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		ManualFormData: req.ManualFormData,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrProductSKURequired):
-			respondError(c, response.CodeBadRequest, "error.order_item_invalid", nil)
-		case errors.Is(err, service.ErrProductSKUInvalid):
-			respondError(c, response.CodeBadRequest, "error.order_item_invalid", nil)
-		case errors.Is(err, service.ErrInvalidOrderItem):
-			respondError(c, response.CodeBadRequest, "error.order_item_invalid", nil)
-		case errors.Is(err, service.ErrInvalidOrderAmount):
-			respondError(c, response.CodeBadRequest, "error.order_amount_invalid", nil)
-		case errors.Is(err, service.ErrProductPurchaseNotAllowed):
-			respondError(c, response.CodeBadRequest, "error.product_purchase_not_allowed", nil)
-		case errors.Is(err, service.ErrManualStockInsufficient):
-			respondError(c, response.CodeBadRequest, "error.manual_stock_insufficient", nil)
-		case errors.Is(err, service.ErrCardSecretInsufficient):
-			respondError(c, response.CodeBadRequest, "error.card_secret_insufficient", nil)
-		case errors.Is(err, service.ErrOrderCurrencyMismatch):
-			respondError(c, response.CodeBadRequest, "error.order_currency_mismatch", nil)
-		case errors.Is(err, service.ErrProductPriceInvalid):
-			respondError(c, response.CodeBadRequest, "error.product_price_invalid", nil)
-		case errors.Is(err, service.ErrProductNotAvailable):
-			respondError(c, response.CodeBadRequest, "error.product_not_available", nil)
-		case errors.Is(err, service.ErrCouponInvalid):
-			respondError(c, response.CodeBadRequest, "error.coupon_invalid", nil)
-		case errors.Is(err, service.ErrCouponNotFound):
-			respondError(c, response.CodeBadRequest, "error.coupon_not_found", nil)
-		case errors.Is(err, service.ErrCouponInactive):
-			respondError(c, response.CodeBadRequest, "error.coupon_inactive", nil)
-		case errors.Is(err, service.ErrCouponNotStarted):
-			respondError(c, response.CodeBadRequest, "error.coupon_not_started", nil)
-		case errors.Is(err, service.ErrCouponExpired):
-			respondError(c, response.CodeBadRequest, "error.coupon_expired", nil)
-		case errors.Is(err, service.ErrCouponUsageLimit):
-			respondError(c, response.CodeBadRequest, "error.coupon_usage_limit", nil)
-		case errors.Is(err, service.ErrCouponPerUserLimit):
-			respondError(c, response.CodeBadRequest, "error.coupon_per_user_limit", nil)
-		case errors.Is(err, service.ErrCouponMinAmount):
-			respondError(c, response.CodeBadRequest, "error.coupon_min_amount", nil)
-		case errors.Is(err, service.ErrCouponScopeInvalid):
-			respondError(c, response.CodeBadRequest, "error.coupon_scope_invalid", nil)
-		case errors.Is(err, service.ErrPromotionInvalid):
-			respondError(c, response.CodeBadRequest, "error.promotion_invalid", nil)
-		case errors.Is(err, service.ErrManualFormSchemaInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_schema_invalid", nil)
-		case errors.Is(err, service.ErrManualFormRequiredMissing):
-			respondError(c, response.CodeBadRequest, "error.manual_form_required_missing", nil)
-		case errors.Is(err, service.ErrManualFormFieldInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_field_invalid", nil)
-		case errors.Is(err, service.ErrManualFormTypeInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_type_invalid", nil)
-		case errors.Is(err, service.ErrManualFormOptionInvalid):
-			respondError(c, response.CodeBadRequest, "error.manual_form_option_invalid", nil)
-		default:
-			respondError(c, response.CodeInternal, "error.order_create_failed", err)
-		}
+		respondUserOrderCreateError(c, err)
 		return
 	}
 
@@ -238,12 +130,7 @@ func (h *Handler) ListOrders(c *gin.Context) {
 		return
 	}
 
-	pagination := response.Pagination{
-		Page:      page,
-		PageSize:  pageSize,
-		Total:     total,
-		TotalPage: (total + int64(pageSize) - 1) / int64(pageSize),
-	}
+	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, orders, pagination)
 }
 

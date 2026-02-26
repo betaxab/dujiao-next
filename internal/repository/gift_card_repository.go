@@ -156,10 +156,7 @@ func (r *GormGiftCardRepository) List(filter GiftCardListFilter) ([]models.GiftC
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var cards []models.GiftCard
 	if err := query.Order("id desc").Find(&cards).Error; err != nil {

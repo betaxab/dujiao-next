@@ -62,10 +62,7 @@ func (r *GormAuthzAuditLogRepository) ListAdmin(filter AuthzAuditLogListFilter) 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	logs := make([]models.AuthzAuditLog, 0)
 	if err := query.Order("id DESC").Find(&logs).Error; err != nil {

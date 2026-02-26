@@ -136,10 +136,7 @@ func (r *GormCouponRepository) List(filter CouponListFilter) ([]models.Coupon, i
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	if err := query.Order("id desc").Find(&coupons).Error; err != nil {
 		return nil, 0, err

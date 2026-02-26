@@ -107,10 +107,7 @@ func (r *GormUserRepository) List(filter UserListFilter) ([]models.User, int64, 
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	var users []models.User
 	if err := query.Order("id DESC").Find(&users).Error; err != nil {

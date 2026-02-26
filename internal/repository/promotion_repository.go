@@ -110,10 +110,7 @@ func (r *GormPromotionRepository) List(filter PromotionListFilter) ([]models.Pro
 		return nil, 0, err
 	}
 
-	if filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		query = query.Limit(filter.PageSize).Offset(offset)
-	}
+	query = applyPagination(query, filter.Page, filter.PageSize)
 
 	if err := query.Order("id desc").Find(&promotions).Error; err != nil {
 		return nil, 0, err
