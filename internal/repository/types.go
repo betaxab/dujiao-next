@@ -59,6 +59,8 @@ type PaymentListFilter struct {
 	Status       string
 	CreatedFrom  *time.Time
 	CreatedTo    *time.Time
+	SkipCount    bool
+	Lightweight  bool
 }
 
 // PaymentChannelListFilter 查询支付渠道列表的过滤条件

@@ -1,11 +1,9 @@
 package admin
 
 import (
-	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -27,70 +25,21 @@ type AdminPaymentItem struct {
 	RechargeUserID uint   `json:"recharge_user_id,omitempty"`
 }
 
+const adminPaymentExportBatchSize = 500
+
 // GetAdminPayments 获取支付记录列表
 func (h *Handler) GetAdminPayments(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	page, pageSize = normalizePagination(page, pageSize)
 
-	var orderID uint
-	if raw := c.Query("order_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || parsed == 0 {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		orderID = uint(parsed)
-	}
-	var userID uint
-	if raw := c.Query("user_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || parsed == 0 {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		userID = uint(parsed)
-	}
-
-	var channelID uint
-	if raw := c.Query("channel_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || parsed == 0 {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		channelID = uint(parsed)
-	}
-
-	providerType := c.Query("provider_type")
-	channelType := c.Query("channel_type")
-	status := c.Query("status")
-	createdFromRaw := strings.TrimSpace(c.Query("created_from"))
-	createdToRaw := strings.TrimSpace(c.Query("created_to"))
-
-	createdFrom, err := parseTimeNullable(createdFromRaw)
-	if err != nil {
-		respondError(c, response.CodeBadRequest, "error.bad_request", err)
-		return
-	}
-	createdTo, err := parseTimeNullable(createdToRaw)
+	filter, err := buildAdminPaymentFilter(c, page, pageSize)
 	if err != nil {
 		respondError(c, response.CodeBadRequest, "error.bad_request", err)
 		return
 	}
 
-	payments, total, err := h.PaymentService.ListPayments(repository.PaymentListFilter{
-		Page:         page,
-		PageSize:     pageSize,
-		UserID:       userID,
-		OrderID:      orderID,
-		ChannelID:    channelID,
-		ProviderType: providerType,
-		ChannelType:  channelType,
-		Status:       status,
-		CreatedFrom:  createdFrom,
-		CreatedTo:    createdTo,
-	})
+	payments, total, err := h.PaymentService.ListPayments(filter)
 	if err != nil {
 		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
 		return
@@ -125,75 +74,25 @@ func (h *Handler) GetAdminPayments(c *gin.Context) {
 
 // ExportAdminPayments 导出支付记录 CSV
 func (h *Handler) ExportAdminPayments(c *gin.Context) {
-	var orderID uint
-	if raw := c.Query("order_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || parsed == 0 {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		orderID = uint(parsed)
-	}
-	var userID uint
-	if raw := c.Query("user_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || parsed == 0 {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		userID = uint(parsed)
-	}
-
-	var channelID uint
-	if raw := c.Query("channel_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil || parsed == 0 {
-			respondError(c, response.CodeBadRequest, "error.bad_request", err)
-			return
-		}
-		channelID = uint(parsed)
-	}
-
-	providerType := c.Query("provider_type")
-	channelType := c.Query("channel_type")
-	status := c.Query("status")
-	createdFromRaw := strings.TrimSpace(c.Query("created_from"))
-	createdToRaw := strings.TrimSpace(c.Query("created_to"))
-	createdFrom, err := parseTimeNullable(createdFromRaw)
+	filter, err := buildAdminPaymentFilter(c, 1, adminPaymentExportBatchSize)
 	if err != nil {
 		respondError(c, response.CodeBadRequest, "error.bad_request", err)
 		return
 	}
-	createdTo, err := parseTimeNullable(createdToRaw)
-	if err != nil {
-		respondError(c, response.CodeBadRequest, "error.bad_request", err)
-		return
-	}
+	filter.SkipCount = true
+	filter.Lightweight = true
 
-	payments, _, err := h.PaymentService.ListPayments(repository.PaymentListFilter{
-		Page:         1,
-		PageSize:     0,
-		UserID:       userID,
-		OrderID:      orderID,
-		ChannelID:    channelID,
-		ProviderType: providerType,
-		ChannelType:  channelType,
-		Status:       status,
-		CreatedFrom:  createdFrom,
-		CreatedTo:    createdTo,
-	})
+	payments, _, err := h.PaymentService.ListPayments(filter)
 	if err != nil {
 		respondError(c, response.CodeInternal, "error.payment_fetch_failed", err)
 		return
 	}
 
-	buffer := &bytes.Buffer{}
-	writer := csv.NewWriter(buffer)
-	rechargeMetaMap, err := h.resolvePaymentRechargeMeta(payments)
-	if err != nil {
-		respondError(c, response.CodeInternal, "error.payment_export_failed", err)
-		return
-	}
+	filename := fmt.Sprintf("payments_%s.csv", time.Now().Format("20060102_150405"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+	writer := csv.NewWriter(c.Writer)
 	if err := writer.Write([]string{
 		"id",
 		"order_id",
@@ -211,44 +110,34 @@ func (h *Handler) ExportAdminPayments(c *gin.Context) {
 		"expired_at",
 		"provider_ref",
 	}); err != nil {
-		respondError(c, response.CodeInternal, "error.payment_export_failed", err)
+		requestLog(c).Errorw("admin_payment_export_header_write_failed", "error", err)
 		return
 	}
 
-	for _, payment := range payments {
-		rechargeMeta := rechargeMetaMap[payment.ID]
-		record := []string{
-			strconv.FormatUint(uint64(payment.ID), 10),
-			strconv.FormatUint(uint64(payment.OrderID), 10),
-			rechargeMeta.RechargeNo,
-			rechargeMeta.Status,
-			strconv.FormatUint(uint64(rechargeMeta.UserID), 10),
-			strconv.FormatUint(uint64(payment.ChannelID), 10),
-			payment.ProviderType,
-			payment.ChannelType,
-			payment.Status,
-			payment.Amount.String(),
-			payment.Currency,
-			payment.CreatedAt.Format(time.RFC3339),
-			formatTimeNullable(payment.PaidAt),
-			formatTimeNullable(payment.ExpiredAt),
-			payment.ProviderRef,
+	page := 1
+	for {
+		if len(payments) > 0 {
+			if err := h.writeAdminPaymentCSVRows(writer, payments); err != nil {
+				requestLog(c).Errorw("admin_payment_export_rows_write_failed", "page", page, "error", err)
+				return
+			}
+			writer.Flush()
+			if err := writer.Error(); err != nil {
+				requestLog(c).Errorw("admin_payment_export_flush_failed", "page", page, "error", err)
+				return
+			}
 		}
-		if err := writer.Write(record); err != nil {
-			respondError(c, response.CodeInternal, "error.payment_export_failed", err)
+		if len(payments) < adminPaymentExportBatchSize {
+			break
+		}
+		page++
+		filter.Page = page
+		payments, _, err = h.PaymentService.ListPayments(filter)
+		if err != nil {
+			requestLog(c).Errorw("admin_payment_export_batch_fetch_failed", "page", page, "error", err)
 			return
 		}
 	}
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		respondError(c, response.CodeInternal, "error.payment_export_failed", err)
-		return
-	}
-
-	filename := fmt.Sprintf("payments_%s.csv", time.Now().Format("20060102_150405"))
-	c.Header("Content-Type", "text/csv; charset=utf-8")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	c.Data(http.StatusOK, "text/csv; charset=utf-8", buffer.Bytes())
 }
 
 // GetAdminPayment 获取支付记录详情
@@ -295,6 +184,88 @@ func formatTimeNullable(raw *time.Time) string {
 		return ""
 	}
 	return raw.Format(time.RFC3339)
+}
+
+func parseAdminPaymentQueryUint(c *gin.Context, key string) (uint, error) {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if parsed == 0 {
+		return 0, errors.New("invalid query value")
+	}
+	return uint(parsed), nil
+}
+
+func buildAdminPaymentFilter(c *gin.Context, page, pageSize int) (repository.PaymentListFilter, error) {
+	orderID, err := parseAdminPaymentQueryUint(c, "order_id")
+	if err != nil {
+		return repository.PaymentListFilter{}, err
+	}
+	userID, err := parseAdminPaymentQueryUint(c, "user_id")
+	if err != nil {
+		return repository.PaymentListFilter{}, err
+	}
+	channelID, err := parseAdminPaymentQueryUint(c, "channel_id")
+	if err != nil {
+		return repository.PaymentListFilter{}, err
+	}
+
+	createdFrom, err := parseTimeNullable(strings.TrimSpace(c.Query("created_from")))
+	if err != nil {
+		return repository.PaymentListFilter{}, err
+	}
+	createdTo, err := parseTimeNullable(strings.TrimSpace(c.Query("created_to")))
+	if err != nil {
+		return repository.PaymentListFilter{}, err
+	}
+
+	return repository.PaymentListFilter{
+		Page:         page,
+		PageSize:     pageSize,
+		UserID:       userID,
+		OrderID:      orderID,
+		ChannelID:    channelID,
+		ProviderType: strings.TrimSpace(c.Query("provider_type")),
+		ChannelType:  strings.TrimSpace(c.Query("channel_type")),
+		Status:       strings.TrimSpace(c.Query("status")),
+		CreatedFrom:  createdFrom,
+		CreatedTo:    createdTo,
+	}, nil
+}
+
+func (h *Handler) writeAdminPaymentCSVRows(writer *csv.Writer, payments []models.Payment) error {
+	rechargeMetaMap, err := h.resolvePaymentRechargeMeta(payments)
+	if err != nil {
+		return err
+	}
+	for _, payment := range payments {
+		rechargeMeta := rechargeMetaMap[payment.ID]
+		if err := writer.Write([]string{
+			strconv.FormatUint(uint64(payment.ID), 10),
+			strconv.FormatUint(uint64(payment.OrderID), 10),
+			rechargeMeta.RechargeNo,
+			rechargeMeta.Status,
+			strconv.FormatUint(uint64(rechargeMeta.UserID), 10),
+			strconv.FormatUint(uint64(payment.ChannelID), 10),
+			payment.ProviderType,
+			payment.ChannelType,
+			payment.Status,
+			payment.Amount.String(),
+			payment.Currency,
+			payment.CreatedAt.Format(time.RFC3339),
+			formatTimeNullable(payment.PaidAt),
+			formatTimeNullable(payment.ExpiredAt),
+			payment.ProviderRef,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *Handler) resolvePaymentChannelNames(payments []models.Payment) (map[uint]string, error) {

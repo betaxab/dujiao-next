@@ -37,6 +37,19 @@ func TestBuildLocalizedLikeCondition(t *testing.T) {
 	}
 }
 
+func TestBuildLocalizedLikeConditionByDialectPostgres(t *testing.T) {
+	condition, argCount := buildLocalizedLikeConditionByDialect("postgres", []string{"slug"}, []string{"title_json"})
+	if argCount != 4 {
+		t.Fatalf("arg count want 4 got %d", argCount)
+	}
+	if !strings.Contains(condition, "slug ILIKE ?") {
+		t.Fatalf("condition should contain slug ILIKE, got %s", condition)
+	}
+	if !strings.Contains(condition, "(title_json::jsonb ->> 'zh-CN') ILIKE ?") {
+		t.Fatalf("condition should contain postgres zh-CN ILIKE, got %s", condition)
+	}
+}
+
 func TestRepeatLikeArgs(t *testing.T) {
 	args := repeatLikeArgs("%test%", 3)
 	if len(args) != 3 {

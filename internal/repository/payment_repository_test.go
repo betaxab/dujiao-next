@@ -202,3 +202,84 @@ func TestPaymentRepositoryListAdminByUserIncludesWalletRechargePayments(t *testi
 		t.Fatalf("missing wallet recharge payment for user")
 	}
 }
+
+func TestPaymentRepositoryListAdminLightweightSkipCount(t *testing.T) {
+	repo, db := setupPaymentRepositoryTest(t)
+	now := time.Now().UTC().Truncate(time.Second)
+
+	user := models.User{
+		Email:        "payment_repo_lightweight@example.com",
+		PasswordHash: "hash",
+		Status:       constants.UserStatusActive,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+
+	order := models.Order{
+		OrderNo:                 "DJLIGHTWEIGHT001",
+		UserID:                  user.ID,
+		Status:                  constants.OrderStatusPendingPayment,
+		Currency:                "USD",
+		OriginalAmount:          models.NewMoneyFromDecimal(decimal.NewFromInt(12)),
+		DiscountAmount:          models.NewMoneyFromDecimal(decimal.Zero),
+		PromotionDiscountAmount: models.NewMoneyFromDecimal(decimal.Zero),
+		TotalAmount:             models.NewMoneyFromDecimal(decimal.NewFromInt(12)),
+		WalletPaidAmount:        models.NewMoneyFromDecimal(decimal.Zero),
+		OnlinePaidAmount:        models.NewMoneyFromDecimal(decimal.NewFromInt(12)),
+		RefundedAmount:          models.NewMoneyFromDecimal(decimal.Zero),
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatalf("create order failed: %v", err)
+	}
+
+	payload := models.JSON{"foo": "bar", "nested": map[string]interface{}{"key": "value"}}
+	payment := models.Payment{
+		OrderID:         order.ID,
+		ChannelID:       1,
+		ProviderType:    constants.PaymentProviderOfficial,
+		ChannelType:     constants.PaymentChannelTypeStripe,
+		InteractionMode: constants.PaymentInteractionRedirect,
+		Amount:          models.NewMoneyFromDecimal(decimal.NewFromInt(12)),
+		FeeRate:         models.NewMoneyFromDecimal(decimal.Zero),
+		FeeAmount:       models.NewMoneyFromDecimal(decimal.Zero),
+		Currency:        "USD",
+		Status:          constants.PaymentStatusPending,
+		ProviderRef:     "pi_lightweight_001",
+		ProviderPayload: payload,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := db.Create(&payment).Error; err != nil {
+		t.Fatalf("create payment failed: %v", err)
+	}
+
+	rows, total, err := repo.ListAdmin(PaymentListFilter{
+		Page:        1,
+		PageSize:    20,
+		SkipCount:   true,
+		Lightweight: true,
+	})
+	if err != nil {
+		t.Fatalf("list admin payments failed: %v", err)
+	}
+	if total != 0 {
+		t.Fatalf("total want 0 when skip count got %d", total)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows len want 1 got %d", len(rows))
+	}
+	if rows[0].ID != payment.ID {
+		t.Fatalf("payment id mismatch, want %d got %d", payment.ID, rows[0].ID)
+	}
+	if rows[0].ProviderRef != payment.ProviderRef {
+		t.Fatalf("provider ref mismatch, want %s got %s", payment.ProviderRef, rows[0].ProviderRef)
+	}
+	if len(rows[0].ProviderPayload) != 0 {
+		t.Fatalf("provider payload should be empty in lightweight query, got %+v", rows[0].ProviderPayload)
+	}
+}

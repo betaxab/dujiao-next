@@ -49,15 +49,20 @@ func localizedJSONCoalesceExpr(db *gorm.DB, column string) string {
 
 // buildLocalizedLikeCondition 构建普通列 + JSON 多语言列的 LIKE 条件，并返回参数数量。
 func buildLocalizedLikeCondition(db *gorm.DB, plainColumns, jsonColumns []string) (string, int) {
+	return buildLocalizedLikeConditionByDialect(dbDialectName(db), plainColumns, jsonColumns)
+}
+
+func buildLocalizedLikeConditionByDialect(dialect string, plainColumns, jsonColumns []string) (string, int) {
 	parts := make([]string, 0, len(plainColumns)+len(jsonColumns)*len(localizedJSONSearchKeys))
 	argCount := 0
+	operator := likeOperatorByDialect(dialect)
 
 	for _, column := range plainColumns {
 		trimmed := strings.TrimSpace(column)
 		if trimmed == "" {
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("%s LIKE ?", trimmed))
+		parts = append(parts, fmt.Sprintf("%s %s ?", trimmed, operator))
 		argCount++
 	}
 
@@ -67,12 +72,21 @@ func buildLocalizedLikeCondition(db *gorm.DB, plainColumns, jsonColumns []string
 			continue
 		}
 		for _, key := range localizedJSONSearchKeys {
-			parts = append(parts, fmt.Sprintf("%s LIKE ?", jsonTextExpr(db, trimmed, key)))
+			parts = append(parts, fmt.Sprintf("%s %s ?", jsonTextExprByDialect(dialect, trimmed, key), operator))
 			argCount++
 		}
 	}
 
 	return strings.Join(parts, " OR "), argCount
+}
+
+func likeOperatorByDialect(dialect string) string {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "postgres", "postgresql":
+		return "ILIKE"
+	default:
+		return "LIKE"
+	}
 }
 
 // repeatLikeArgs 生成重复的 LIKE 参数列表。

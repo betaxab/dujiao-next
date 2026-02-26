@@ -170,9 +170,33 @@ func (r *GormPaymentRepository) ListAdmin(filter PaymentListFilter) ([]models.Pa
 		query = query.Where("payments.created_at <= ?", *filter.CreatedTo)
 	}
 
+	if filter.Lightweight {
+		query = query.Select(
+			"payments.id",
+			"payments.order_id",
+			"payments.channel_id",
+			"payments.provider_type",
+			"payments.channel_type",
+			"payments.interaction_mode",
+			"payments.amount",
+			"payments.fee_rate",
+			"payments.fee_amount",
+			"payments.currency",
+			"payments.status",
+			"payments.provider_ref",
+			"payments.created_at",
+			"payments.updated_at",
+			"payments.paid_at",
+			"payments.expired_at",
+			"payments.callback_at",
+		)
+	}
+
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
+	if !filter.SkipCount {
+		if err := query.Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
 	}
 
 	query = applyPagination(query, filter.Page, filter.PageSize)
