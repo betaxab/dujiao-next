@@ -46,7 +46,7 @@ func releaseManualStockByItems(productRepo repository.ProductRepository, product
 			if err != nil {
 				return err
 			}
-			if sku == nil || sku.ManualStockTotal <= 0 {
+			if sku == nil || sku.ManualStockTotal == constants.ManualStockUnlimited {
 				continue
 			}
 			if _, err := productSKURepo.ReleaseManualStock(skuID, quantity); err != nil {
@@ -67,7 +67,7 @@ func releaseManualStockByItems(productRepo repository.ProductRepository, product
 		if err != nil {
 			return err
 		}
-		if product == nil || product.ManualStockTotal <= 0 {
+		if product == nil || product.ManualStockTotal == constants.ManualStockUnlimited {
 			continue
 		}
 		if _, err := productRepo.ReleaseManualStock(productID, quantity); err != nil {
@@ -85,7 +85,7 @@ func consumeManualStockByItems(productRepo repository.ProductRepository, product
 			if err != nil {
 				return err
 			}
-			if sku == nil || sku.ManualStockTotal <= 0 {
+			if sku == nil || sku.ManualStockTotal == constants.ManualStockUnlimited {
 				continue
 			}
 			if _, err := productSKURepo.ConsumeManualStock(skuID, quantity); err != nil {
@@ -106,7 +106,7 @@ func consumeManualStockByItems(productRepo repository.ProductRepository, product
 		if err != nil {
 			return err
 		}
-		if product == nil || product.ManualStockTotal <= 0 {
+		if product == nil || product.ManualStockTotal == constants.ManualStockUnlimited {
 			continue
 		}
 		if _, err := productRepo.ConsumeManualStock(productID, quantity); err != nil {

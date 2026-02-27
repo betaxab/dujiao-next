@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/models"
 
 	"gorm.io/gorm"
@@ -144,8 +145,9 @@ func (r *GormProductSKURepository) ReserveManualStock(skuID uint, quantity int) 
 		return 0, errors.New("invalid manual stock reserve params")
 	}
 	result := r.db.Model(&models.ProductSKU{}).
-		Where("id = ? AND manual_stock_total > 0 AND (manual_stock_total - manual_stock_locked - manual_stock_sold) >= ?", skuID, quantity).
+		Where("id = ? AND manual_stock_total >= 0 AND manual_stock_total >= ?", skuID, quantity).
 		Updates(map[string]interface{}{
+			"manual_stock_total":  gorm.Expr("manual_stock_total - ?", quantity),
 			"manual_stock_locked": gorm.Expr("manual_stock_locked + ?", quantity),
 		})
 	if result.Error != nil {
@@ -160,8 +162,9 @@ func (r *GormProductSKURepository) ReleaseManualStock(skuID uint, quantity int) 
 		return 0, errors.New("invalid manual stock release params")
 	}
 	result := r.db.Model(&models.ProductSKU{}).
-		Where("id = ? AND manual_stock_total > 0 AND manual_stock_locked >= ?", skuID, quantity).
+		Where("id = ? AND manual_stock_total >= 0 AND manual_stock_locked >= ?", skuID, quantity).
 		Updates(map[string]interface{}{
+			"manual_stock_total":  gorm.Expr("manual_stock_total + ?", quantity),
 			"manual_stock_locked": gorm.Expr("manual_stock_locked - ?", quantity),
 		})
 	if result.Error != nil {
@@ -176,9 +179,12 @@ func (r *GormProductSKURepository) ConsumeManualStock(skuID uint, quantity int) 
 		return 0, errors.New("invalid manual stock consume params")
 	}
 	result := r.db.Model(&models.ProductSKU{}).
-		Where("id = ? AND manual_stock_total > 0 AND (manual_stock_total - manual_stock_sold) >= ?", skuID, quantity).
+		Where("id = ? AND manual_stock_total >= ? AND (manual_stock_locked >= ? OR (manual_stock_locked < ? AND manual_stock_total >= (? - manual_stock_locked)))",
+			skuID, constants.ManualStockUnlimited+1, quantity, quantity, quantity).
 		Updates(map[string]interface{}{
-			"manual_stock_locked": gorm.Expr("CASE WHEN manual_stock_locked >= ? THEN manual_stock_locked - ? ELSE manual_stock_locked END", quantity, quantity),
+			// 兼容历史未预占订单：锁定不足时按短缺量扣减剩余库存。
+			"manual_stock_total":  gorm.Expr("manual_stock_total - CASE WHEN manual_stock_locked >= ? THEN 0 ELSE ? - manual_stock_locked END", quantity, quantity),
+			"manual_stock_locked": gorm.Expr("CASE WHEN manual_stock_locked >= ? THEN manual_stock_locked - ? ELSE 0 END", quantity, quantity),
 			"manual_stock_sold":   gorm.Expr("manual_stock_sold + ?", quantity),
 		})
 	if result.Error != nil {

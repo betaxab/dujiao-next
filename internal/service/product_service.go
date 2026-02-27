@@ -142,7 +142,7 @@ func (s *ProductService) Create(input CreateProductInput) (*models.Product, erro
 	if input.ManualStockTotal != nil {
 		manualStockTotal = *input.ManualStockTotal
 	}
-	if manualStockTotal < 0 {
+	if manualStockTotal < constants.ManualStockUnlimited {
 		return nil, ErrManualStockInvalid
 	}
 
@@ -270,7 +270,7 @@ func (s *ProductService) Update(id string, input CreateProductInput) (*models.Pr
 	if input.ManualStockTotal != nil {
 		manualStockTotal = *input.ManualStockTotal
 	}
-	if manualStockTotal < 0 {
+	if manualStockTotal < constants.ManualStockUnlimited {
 		return nil, ErrManualStockInvalid
 	}
 
@@ -292,8 +292,6 @@ func (s *ProductService) Update(id string, input CreateProductInput) (*models.Pr
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
-	} else if manualStockTotal < product.ManualStockLocked+product.ManualStockSold {
-		return nil, ErrManualStockInvalid
 	}
 
 	product.PriceAmount = models.NewMoneyFromDecimal(priceAmount)
@@ -342,17 +340,59 @@ func syncSingleProductSKU(skuRepo repository.ProductSKURepository, productID uin
 			SortOrder:         0,
 		})
 	}
-	if len(skus) > 1 {
-		return nil
+	targetIndex := pickSingleModeTargetSKUIndex(skus)
+	if targetIndex < 0 || targetIndex >= len(skus) {
+		return ErrProductSKUInvalid
 	}
-	sku := skus[0]
-	if manualStockTotal < sku.ManualStockLocked+sku.ManualStockSold {
-		return ErrManualStockInvalid
+
+	target := skus[targetIndex]
+	target.PriceAmount = models.NewMoneyFromDecimal(priceAmount)
+	target.ManualStockTotal = manualStockTotal
+	target.IsActive = true
+	if strings.TrimSpace(target.SKUCode) == "" {
+		target.SKUCode = models.DefaultSKUCode
 	}
-	sku.PriceAmount = models.NewMoneyFromDecimal(priceAmount)
-	sku.ManualStockTotal = manualStockTotal
-	sku.IsActive = true
-	return skuRepo.Update(&sku)
+	if err := skuRepo.Update(&target); err != nil {
+		return err
+	}
+
+	for i := range skus {
+		if i == targetIndex || !skus[i].IsActive {
+			continue
+		}
+		skus[i].IsActive = false
+		if err := skuRepo.Update(&skus[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func pickSingleModeTargetSKUIndex(skus []models.ProductSKU) int {
+	if len(skus) == 0 {
+		return -1
+	}
+	defaultCode := strings.ToUpper(strings.TrimSpace(models.DefaultSKUCode))
+
+	for i := range skus {
+		if !skus[i].IsActive {
+			continue
+		}
+		if strings.ToUpper(strings.TrimSpace(skus[i].SKUCode)) == defaultCode {
+			return i
+		}
+	}
+	for i := range skus {
+		if skus[i].IsActive {
+			return i
+		}
+	}
+	for i := range skus {
+		if strings.ToUpper(strings.TrimSpace(skus[i].SKUCode)) == defaultCode {
+			return i
+		}
+	}
+	return 0
 }
 
 type normalizedProductSKU struct {
@@ -374,6 +414,7 @@ func normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType string,
 	hasActive := false
 	minActivePrice := decimal.Zero
 	manualStockTotal := 0
+	hasUnlimitedStock := false
 
 	for _, input := range inputs {
 		skuCode := strings.TrimSpace(input.SKUCode)
@@ -392,19 +433,16 @@ func normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType string,
 		}
 
 		manualTotal := input.ManualStockTotal
-		if manualTotal < 0 {
+		if manualTotal < constants.ManualStockUnlimited {
 			return nil, decimal.Zero, 0, ErrManualStockInvalid
 		}
 		if fulfillmentType != constants.FulfillmentTypeManual {
 			manualTotal = 0
 		}
 		if existingSKUMap != nil && input.ID > 0 {
-			existing, ok := existingSKUMap[input.ID]
+			_, ok := existingSKUMap[input.ID]
 			if !ok {
 				return nil, decimal.Zero, 0, ErrProductSKUInvalid
-			}
-			if manualTotal < existing.ManualStockLocked+existing.ManualStockSold {
-				return nil, decimal.Zero, 0, ErrManualStockInvalid
 			}
 		}
 
@@ -433,7 +471,11 @@ func normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType string,
 			}
 			hasActive = true
 			if fulfillmentType == constants.FulfillmentTypeManual {
-				manualStockTotal += manualTotal
+				if manualTotal == constants.ManualStockUnlimited {
+					hasUnlimitedStock = true
+				} else {
+					manualStockTotal += manualTotal
+				}
 			}
 		}
 	}
@@ -443,6 +485,8 @@ func normalizeProductSKUInputs(inputs []ProductSKUInput, fulfillmentType string,
 	}
 	if fulfillmentType != constants.FulfillmentTypeManual {
 		manualStockTotal = 0
+	} else if hasUnlimitedStock {
+		manualStockTotal = constants.ManualStockUnlimited
 	}
 	return normalized, minActivePrice, manualStockTotal, nil
 }

@@ -21,7 +21,7 @@ type Product struct {
 	PurchaseType         string         `gorm:"type:varchar(20);not null;default:'member'" json:"purchase_type"`    // 购买身份（guest/member）
 	FulfillmentType      string         `gorm:"type:varchar(20);not null;default:'manual'" json:"fulfillment_type"` // 交付类型（auto/manual）
 	ManualFormSchemaJSON JSON           `gorm:"type:json" json:"manual_form_schema"`                                // 人工交付表单 schema
-	ManualStockTotal     int            `gorm:"not null;default:0" json:"manual_stock_total"`                       // 手动库存总量（0 表示不启用手动库存控制）
+	ManualStockTotal     int            `gorm:"not null;default:0" json:"manual_stock_total"`                       // 手动剩余库存（-1 表示无限库存，>=0 表示当前可售数量）
 	ManualStockLocked    int            `gorm:"not null;default:0" json:"manual_stock_locked"`                      // 手动库存占用量（待支付）
 	ManualStockSold      int            `gorm:"not null;default:0" json:"manual_stock_sold"`                        // 手动库存已售量（支付成功后累加）
 	AutoStockAvailable   int64          `gorm:"-" json:"auto_stock_available"`                                      // 自动发货库存可用量（仅结构，不写入数据库）

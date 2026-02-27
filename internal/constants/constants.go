@@ -128,6 +128,11 @@ const (
 	ProductStockStatusOutOfStock = "out_of_stock"
 )
 
+// 手动库存常量
+const (
+	ManualStockUnlimited = -1
+)
+
 // 优惠券类型常量
 const (
 	CouponTypeFixed   = "fixed"

@@ -341,10 +341,10 @@ func (r *GormDashboardRepository) GetStockStats(lowStockThreshold int64) (Dashbo
 		if product.FulfillmentType != constants.FulfillmentTypeManual {
 			continue
 		}
-		if product.ManualStockTotal <= 0 {
+		if product.ManualStockTotal == int64(constants.ManualStockUnlimited) {
 			continue
 		}
-		available := product.ManualStockTotal - product.ManualStockLocked - product.ManualStockSold
+		available := product.ManualStockTotal
 		if available < 0 {
 			available = 0
 		}

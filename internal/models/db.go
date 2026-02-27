@@ -15,6 +15,11 @@ import (
 
 var DB *gorm.DB
 
+const (
+	manualStockRemainingMigrationSettingKey = "migration/manual_stock_remaining_v1"
+	manualStockUnlimitedValue               = -1
+)
+
 // DBPoolConfig 数据库连接池配置
 type DBPoolConfig struct {
 	MaxOpenConns           int
@@ -112,6 +117,9 @@ func AutoMigrate() error {
 	if err := ensureProductSKUMigration(); err != nil {
 		return err
 	}
+	if err := ensureManualStockRemainingMigration(); err != nil {
+		return err
+	}
 
 	// 移除历史遗留商品币种列，统一由站点配置提供币种。
 	if DB.Migrator().HasColumn(&Product{}, "price_currency") {
@@ -120,6 +128,61 @@ func AutoMigrate() error {
 		}
 	}
 	return nil
+}
+
+// ensureManualStockRemainingMigration 将历史“总量库存”迁移为“剩余库存”语义，仅执行一次。
+func ensureManualStockRemainingMigration() error {
+	if DB == nil {
+		return errors.New("database is not initialized")
+	}
+
+	var marker Setting
+	if err := DB.First(&marker, "key = ?", manualStockRemainingMigrationSettingKey).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	} else if migrationDone(marker.ValueJSON) {
+		return nil
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Product{}).
+			Where("manual_stock_total >= ?", manualStockUnlimitedValue+1).
+			Update("manual_stock_total",
+				gorm.Expr("CASE WHEN (manual_stock_total - manual_stock_locked - manual_stock_sold) < 0 THEN 0 ELSE (manual_stock_total - manual_stock_locked - manual_stock_sold) END")).
+			Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&ProductSKU{}).
+			Where("manual_stock_total >= ?", manualStockUnlimitedValue+1).
+			Update("manual_stock_total",
+				gorm.Expr("CASE WHEN (manual_stock_total - manual_stock_locked - manual_stock_sold) < 0 THEN 0 ELSE (manual_stock_total - manual_stock_locked - manual_stock_sold) END")).
+			Error; err != nil {
+			return err
+		}
+
+		marker := Setting{
+			Key: manualStockRemainingMigrationSettingKey,
+			ValueJSON: JSON{
+				"done":        true,
+				"migrated_at": time.Now().UTC().Format(time.RFC3339),
+			},
+		}
+		return tx.Save(&marker).Error
+	})
+}
+
+func migrationDone(value JSON) bool {
+	if len(value) == 0 {
+		return false
+	}
+	done, ok := value["done"]
+	if !ok {
+		return false
+	}
+	flag, ok := done.(bool)
+	return ok && flag
 }
 
 // migrateCartSKUUniqueIndex 迁移购物车唯一索引为 user_id + product_id + sku_id 维度。

@@ -17,8 +17,8 @@ func setupProductRepositoryTest(t *testing.T) (*GormProductRepository, *gorm.DB)
 	if err != nil {
 		t.Fatalf("open sqlite failed: %v", err)
 	}
-	if err := db.AutoMigrate(&models.Product{}); err != nil {
-		t.Fatalf("migrate product failed: %v", err)
+	if err := db.AutoMigrate(&models.Product{}, &models.ProductSKU{}); err != nil {
+		t.Fatalf("migrate product/sku failed: %v", err)
 	}
 	return NewProductRepository(db), db
 }
@@ -41,6 +41,30 @@ func createManualProduct(t *testing.T, repo *GormProductRepository, slug string,
 		t.Fatalf("create product failed: %v", err)
 	}
 	return product
+}
+
+func createManualSKU(t *testing.T, db *gorm.DB, productID uint, code string, total int, locked int, sold int, isActive bool) *models.ProductSKU {
+	t.Helper()
+	sku := &models.ProductSKU{
+		ProductID:         productID,
+		SKUCode:           code,
+		PriceAmount:       models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		ManualStockTotal:  total,
+		ManualStockLocked: locked,
+		ManualStockSold:   sold,
+		IsActive:          true,
+		SortOrder:         0,
+	}
+	if err := db.Create(sku).Error; err != nil {
+		t.Fatalf("create sku failed: %v", err)
+	}
+	if !isActive {
+		sku.IsActive = false
+		if err := db.Save(sku).Error; err != nil {
+			t.Fatalf("update inactive sku failed: %v", err)
+		}
+	}
+	return sku
 }
 
 func TestManualStockReserveReleaseConsumeLifecycle(t *testing.T) {
@@ -74,6 +98,9 @@ func TestManualStockReserveReleaseConsumeLifecycle(t *testing.T) {
 	var got models.Product
 	if err := db.First(&got, product.ID).Error; err != nil {
 		t.Fatalf("reload product failed: %v", err)
+	}
+	if got.ManualStockTotal != 8 {
+		t.Fatalf("total want 8 got %d", got.ManualStockTotal)
 	}
 	if got.ManualStockLocked != 0 {
 		t.Fatalf("locked want 0 got %d", got.ManualStockLocked)
@@ -115,6 +142,9 @@ func TestManualStockConsumeWithLegacyUnreservedOrder(t *testing.T) {
 	if err := db.First(&got, product.ID).Error; err != nil {
 		t.Fatalf("reload product failed: %v", err)
 	}
+	if got.ManualStockTotal != 3 {
+		t.Fatalf("total want 3 got %d", got.ManualStockTotal)
+	}
 	if got.ManualStockLocked != 0 {
 		t.Fatalf("locked want 0 got %d", got.ManualStockLocked)
 	}
@@ -125,7 +155,7 @@ func TestManualStockConsumeWithLegacyUnreservedOrder(t *testing.T) {
 
 func TestManualStockUnlimitedDoesNotReserve(t *testing.T) {
 	repo, _ := setupProductRepositoryTest(t)
-	product := createManualProduct(t, repo, "manual-stock-unlimited", 0, 0, 0)
+	product := createManualProduct(t, repo, "manual-stock-unlimited", constants.ManualStockUnlimited, 0, 0)
 
 	affected, err := repo.ReserveManualStock(product.ID, 1)
 	if err != nil {
@@ -142,4 +172,73 @@ func TestManualStockUnlimitedDoesNotReserve(t *testing.T) {
 	if affected != 0 {
 		t.Fatalf("consume unlimited affected want 0 got %d", affected)
 	}
+}
+
+func TestListManualStockStatusUsesActiveSKURemaining(t *testing.T) {
+	repo, db := setupProductRepositoryTest(t)
+
+	lowBySKU := createManualProduct(t, repo, "low-by-sku", 1, 0, 0)
+	createManualSKU(t, db, lowBySKU.ID, "LOW", 0, 0, 1, true)
+
+	normalBySKU := createManualProduct(t, repo, "normal-by-sku", 0, 0, 0)
+	createManualSKU(t, db, normalBySKU.ID, "NORMAL", 2, 0, 0, true)
+
+	unlimitedBySKU := createManualProduct(t, repo, "unlimited-by-sku", 0, 0, 0)
+	createManualSKU(t, db, unlimitedBySKU.ID, "UNLIMITED", constants.ManualStockUnlimited, 0, 0, true)
+
+	lowByFallback := createManualProduct(t, repo, "low-by-fallback", 0, 0, 0)
+	createManualSKU(t, db, lowByFallback.ID, "INACTIVE-LOW", 5, 0, 0, false)
+
+	normalByFallback := createManualProduct(t, repo, "normal-by-fallback", 3, 0, 0)
+	createManualSKU(t, db, normalByFallback.ID, "INACTIVE-NORMAL", 0, 0, 0, false)
+
+	unlimitedByFallback := createManualProduct(t, repo, "unlimited-by-fallback", constants.ManualStockUnlimited, 0, 0)
+	createManualSKU(t, db, unlimitedByFallback.ID, "INACTIVE-UNLIMITED", 0, 0, 0, false)
+
+	checkSlugs := func(status string, expected map[string]bool) {
+		products, _, err := repo.List(ProductListFilter{
+			Page:              1,
+			PageSize:          100,
+			ManualStockStatus: status,
+		})
+		if err != nil {
+			t.Fatalf("list products by status=%s failed: %v", status, err)
+		}
+		got := make(map[string]bool, len(products))
+		for _, item := range products {
+			got[item.Slug] = true
+		}
+		for slug, want := range expected {
+			if got[slug] != want {
+				t.Fatalf("status=%s expect slug=%s present=%v got=%v", status, slug, want, got[slug])
+			}
+		}
+	}
+
+	checkSlugs("low", map[string]bool{
+		lowBySKU.Slug:            true,
+		lowByFallback.Slug:       true,
+		normalBySKU.Slug:         false,
+		normalByFallback.Slug:    false,
+		unlimitedBySKU.Slug:      false,
+		unlimitedByFallback.Slug: false,
+	})
+
+	checkSlugs("normal", map[string]bool{
+		normalBySKU.Slug:         true,
+		normalByFallback.Slug:    true,
+		lowBySKU.Slug:            false,
+		lowByFallback.Slug:       false,
+		unlimitedBySKU.Slug:      false,
+		unlimitedByFallback.Slug: false,
+	})
+
+	checkSlugs("unlimited", map[string]bool{
+		unlimitedBySKU.Slug:      true,
+		unlimitedByFallback.Slug: true,
+		normalBySKU.Slug:         false,
+		normalByFallback.Slug:    false,
+		lowBySKU.Slug:            false,
+		lowByFallback.Slug:       false,
+	})
 }

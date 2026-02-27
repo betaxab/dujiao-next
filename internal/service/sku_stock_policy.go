@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 
+	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/models"
 )
 
@@ -27,14 +28,23 @@ func manualSKUAvailable(sku *models.ProductSKU) int {
 	if sku == nil {
 		return 0
 	}
-	return sku.ManualStockTotal - sku.ManualStockLocked - sku.ManualStockSold
+	if sku.ManualStockTotal == constants.ManualStockUnlimited {
+		return int(^uint(0) >> 1)
+	}
+	if sku.ManualStockTotal < 0 {
+		return 0
+	}
+	return sku.ManualStockTotal
 }
 
 func shouldEnforceManualSKUStock(product *models.Product, sku *models.ProductSKU) bool {
 	if product == nil || sku == nil {
 		return false
 	}
-	if sku.ManualStockTotal > 0 {
+	if sku.ManualStockTotal == constants.ManualStockUnlimited {
+		return false
+	}
+	if sku.ManualStockTotal >= 0 {
 		return true
 	}
 	if strings.ToUpper(strings.TrimSpace(sku.SKUCode)) != models.DefaultSKUCode {

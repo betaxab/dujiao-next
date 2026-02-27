@@ -241,10 +241,7 @@ func (h *Handler) decorateProductStock(product *models.Product, item *PublicProd
 	}
 
 	stockStatus := constants.ProductStockStatusInStock
-	manualAvailable := product.ManualStockTotal - product.ManualStockLocked - product.ManualStockSold
-	if manualAvailable < 0 {
-		manualAvailable = 0
-	}
+	manualAvailable := 0
 
 	item.ManualStockAvailable = manualAvailable
 	item.AutoStockTotal = 0
@@ -260,11 +257,42 @@ func (h *Handler) decorateProductStock(product *models.Product, item *PublicProd
 	}
 
 	if fulfillmentType == constants.FulfillmentTypeManual {
-		if product.ManualStockTotal <= 0 {
+		hasActiveSKU := false
+		hasUnlimitedSKU := false
+		skuRemaining := 0
+		for _, sku := range product.SKUs {
+			if !sku.IsActive {
+				continue
+			}
+			hasActiveSKU = true
+			if sku.ManualStockTotal == constants.ManualStockUnlimited {
+				hasUnlimitedSKU = true
+				continue
+			}
+			if sku.ManualStockTotal > 0 {
+				skuRemaining += sku.ManualStockTotal
+			}
+		}
+		if hasActiveSKU {
+			if hasUnlimitedSKU {
+				item.ManualStockAvailable = constants.ManualStockUnlimited
+				item.StockStatus = constants.ProductStockStatusUnlimited
+				item.IsSoldOut = false
+				return
+			}
+			manualAvailable = skuRemaining
+		} else if product.ManualStockTotal == constants.ManualStockUnlimited {
+			item.ManualStockAvailable = constants.ManualStockUnlimited
 			item.StockStatus = constants.ProductStockStatusUnlimited
 			item.IsSoldOut = false
 			return
+		} else {
+			manualAvailable = product.ManualStockTotal
+			if manualAvailable < 0 {
+				manualAvailable = 0
+			}
 		}
+		item.ManualStockAvailable = manualAvailable
 
 		switch {
 		case manualAvailable <= 0:
