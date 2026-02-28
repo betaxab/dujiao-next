@@ -20,9 +20,10 @@ const (
 
 // WalletService 钱包服务
 type WalletService struct {
-	walletRepo repository.WalletRepository
-	orderRepo  repository.OrderRepository
-	userRepo   repository.UserRepository
+	walletRepo   repository.WalletRepository
+	orderRepo    repository.OrderRepository
+	userRepo     repository.UserRepository
+	affiliateSvc *AffiliateService
 }
 
 // WalletRechargeInput 用户充值输入
@@ -60,11 +61,17 @@ type AdminRefundToWalletInput struct {
 }
 
 // NewWalletService 创建钱包服务
-func NewWalletService(walletRepo repository.WalletRepository, orderRepo repository.OrderRepository, userRepo repository.UserRepository) *WalletService {
+func NewWalletService(
+	walletRepo repository.WalletRepository,
+	orderRepo repository.OrderRepository,
+	userRepo repository.UserRepository,
+	affiliateSvc *AffiliateService,
+) *WalletService {
 	return &WalletService{
-		walletRepo: walletRepo,
-		orderRepo:  orderRepo,
-		userRepo:   userRepo,
+		walletRepo:   walletRepo,
+		orderRepo:    orderRepo,
+		userRepo:     userRepo,
+		affiliateSvc: affiliateSvc,
 	}
 }
 
@@ -193,7 +200,8 @@ func (s *WalletService) AdminRefundToWallet(input AdminRefundToWalletInput) (*mo
 		if order.TotalAmount.Decimal.LessThanOrEqual(decimal.Zero) {
 			return ErrOrderStatusInvalid
 		}
-		refundable := order.TotalAmount.Decimal.Sub(order.RefundedAmount.Decimal).Round(2)
+		refundedBefore := order.RefundedAmount.Decimal.Round(2)
+		refundable := order.TotalAmount.Decimal.Sub(refundedBefore).Round(2)
 		if amount.GreaterThan(refundable) {
 			return ErrWalletRefundExceeded
 		}
@@ -211,12 +219,23 @@ func (s *WalletService) AdminRefundToWallet(input AdminRefundToWalletInput) (*mo
 			return ErrWalletAccountUpdateFailed
 		}
 
-		newRefunded := order.RefundedAmount.Decimal.Add(amount).Round(2)
+		newRefunded := refundedBefore.Add(amount).Round(2)
 		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
 			"refunded_amount": models.NewMoneyFromDecimal(newRefunded),
 			"updated_at":      time.Now(),
 		}).Error; err != nil {
 			return ErrOrderUpdateFailed
+		}
+		if s.affiliateSvc != nil {
+			if err := s.affiliateSvc.HandleOrderRefundedTx(
+				tx,
+				&order,
+				amount,
+				refundedBefore,
+				"order_refunded_to_wallet",
+			); err != nil {
+				return err
+			}
 		}
 
 		txn := &models.WalletTransaction{

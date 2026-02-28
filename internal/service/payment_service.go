@@ -42,6 +42,7 @@ type PaymentService struct {
 	walletSvc       *WalletService
 	settingService  *SettingService
 	expireMinutes   int
+	affiliateSvc    *AffiliateService
 	notificationSvc *NotificationService
 }
 
@@ -57,6 +58,7 @@ func NewPaymentService(
 	walletSvc *WalletService,
 	settingService *SettingService,
 	expireMinutes int,
+	affiliateSvc *AffiliateService,
 	notificationSvc *NotificationService,
 ) *PaymentService {
 	return &PaymentService{
@@ -70,6 +72,7 @@ func NewPaymentService(
 		walletSvc:       walletSvc,
 		settingService:  settingService,
 		expireMinutes:   expireMinutes,
+		affiliateSvc:    affiliateSvc,
 		notificationSvc: notificationSvc,
 	}
 }

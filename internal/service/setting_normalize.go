@@ -34,6 +34,8 @@ func normalizeSettingValueByKey(key string, value map[string]interface{}) models
 	case constants.SettingKeyNotificationCenterConfig:
 		setting := notificationCenterSettingFromJSON(models.JSON(value), NotificationCenterDefaultSetting())
 		return NotificationCenterSettingToMap(setting)
+	case constants.SettingKeyAffiliateConfig:
+		return normalizeAffiliateSettingMap(value)
 	default:
 		return models.JSON(value)
 	}

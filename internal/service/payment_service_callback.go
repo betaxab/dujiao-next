@@ -465,6 +465,15 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *models.Order, payment *mod
 	if order == nil {
 		return
 	}
+	if s.affiliateSvc != nil {
+		if err := s.affiliateSvc.HandleOrderPaid(order.ID); err != nil {
+			log.Warnw("affiliate_handle_order_paid_failed",
+				"order_id", order.ID,
+				"order_no", order.OrderNo,
+				"error", err,
+			)
+		}
+	}
 	if s.queueClient != nil {
 		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusPaid); err != nil {
 			log.Warnw("payment_enqueue_status_email_failed",

@@ -230,6 +230,7 @@ func TestBuildOrderResultRejectsZeroPromotionPrice(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		nil,
 		15,
 	)
 
@@ -322,6 +323,7 @@ func TestBuildOrderResultOriginalAmountBeforePromotion(t *testing.T) {
 		nil,
 		nil,
 		repository.NewPromotionRepository(db),
+		nil,
 		nil,
 		nil,
 		nil,
@@ -435,6 +437,7 @@ func TestBuildOrderResultRejectsZeroTotalAmountAfterCoupon(t *testing.T) {
 		repository.NewCouponRepository(db),
 		repository.NewCouponUsageRepository(db),
 		repository.NewPromotionRepository(db),
+		nil,
 		nil,
 		nil,
 		nil,

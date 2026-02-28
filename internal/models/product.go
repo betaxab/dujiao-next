@@ -24,6 +24,7 @@ type Product struct {
 	ManualStockTotal     int            `gorm:"not null;default:0" json:"manual_stock_total"`                       // 手动剩余库存（-1 表示无限库存，>=0 表示当前可售数量）
 	ManualStockLocked    int            `gorm:"not null;default:0" json:"manual_stock_locked"`                      // 手动库存占用量（待支付）
 	ManualStockSold      int            `gorm:"not null;default:0" json:"manual_stock_sold"`                        // 手动库存已售量（支付成功后累加）
+	IsAffiliateEnabled   bool           `gorm:"not null;default:false;index" json:"is_affiliate_enabled"`           // 是否参与推广返利
 	AutoStockAvailable   int64          `gorm:"-" json:"auto_stock_available"`                                      // 自动发货库存可用量（仅结构，不写入数据库）
 	AutoStockTotal       int64          `gorm:"-" json:"auto_stock_total"`                                          // 自动发货库存总量（仅结构，不写入数据库）
 	AutoStockLocked      int64          `gorm:"-" json:"auto_stock_locked"`                                         // 自动发货库存占用量（仅结构，不写入数据库）

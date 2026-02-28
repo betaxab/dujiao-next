@@ -42,6 +42,7 @@ type Container struct {
 	UserLoginLogRepo      repository.UserLoginLogRepository
 	AuthzAuditLogRepo     repository.AuthzAuditLogRepository
 	DashboardRepo         repository.DashboardRepository
+	AffiliateRepo         repository.AffiliateRepository
 
 	// Services
 	AuthzService          *authz.Service
@@ -69,6 +70,7 @@ type Container struct {
 	AuthzAuditService     *service.AuthzAuditService
 	DashboardService      *service.DashboardService
 	NotificationService   *service.NotificationService
+	AffiliateService      *service.AffiliateService
 }
 
 // NewContainer 初始化容器
@@ -130,6 +132,7 @@ func (c *Container) initRepositories() {
 	c.UserLoginLogRepo = repository.NewUserLoginLogRepository(db)
 	c.AuthzAuditLogRepo = repository.NewAuthzAuditLogRepository(db)
 	c.DashboardRepo = repository.NewDashboardRepository(db)
+	c.AffiliateRepo = repository.NewAffiliateRepository(db)
 }
 
 func (c *Container) initServices() {
@@ -172,12 +175,13 @@ func (c *Container) initServices() {
 	c.TelegramAuthService = service.NewTelegramAuthService(c.Config.TelegramAuth)
 	c.UserAuthService = service.NewUserAuthService(c.Config, c.UserRepo, c.UserOAuthIdentityRepo, c.EmailVerifyCodeRepo, c.EmailService, c.TelegramAuthService)
 	c.UploadService = service.NewUploadService(c.Config)
+	c.AffiliateService = service.NewAffiliateService(c.AffiliateRepo, c.UserRepo, c.OrderRepo, c.ProductRepo, c.SettingService)
 	c.ProductService = service.NewProductService(c.ProductRepo, c.ProductSKURepo, c.CardSecretRepo)
 	c.PostService = service.NewPostService(c.PostRepo)
 	c.CategoryService = service.NewCategoryService(c.CategoryRepo)
 	c.CartService = service.NewCartService(c.CartRepo, c.ProductRepo, c.ProductSKURepo, c.PromotionRepo, c.SettingService)
-	c.WalletService = service.NewWalletService(c.WalletRepo, c.OrderRepo, c.UserRepo)
-	c.OrderService = service.NewOrderService(c.OrderRepo, c.ProductRepo, c.ProductSKURepo, c.CardSecretRepo, c.CouponRepo, c.CouponUsageRepo, c.PromotionRepo, c.QueueClient, c.SettingService, c.WalletService, c.Config.Order.PaymentExpireMinutes)
+	c.WalletService = service.NewWalletService(c.WalletRepo, c.OrderRepo, c.UserRepo, c.AffiliateService)
+	c.OrderService = service.NewOrderService(c.OrderRepo, c.ProductRepo, c.ProductSKURepo, c.CardSecretRepo, c.CouponRepo, c.CouponUsageRepo, c.PromotionRepo, c.QueueClient, c.SettingService, c.WalletService, c.AffiliateService, c.Config.Order.PaymentExpireMinutes)
 	c.FulfillmentService = service.NewFulfillmentService(c.OrderRepo, c.FulfillmentRepo, c.CardSecretRepo, c.QueueClient)
 	c.CardSecretService = service.NewCardSecretService(c.CardSecretRepo, c.CardSecretBatchRepo, c.ProductRepo, c.ProductSKURepo)
 	c.GiftCardService = service.NewGiftCardService(c.GiftCardRepo, c.UserRepo, c.WalletService, c.SettingService)
@@ -199,6 +203,7 @@ func (c *Container) initServices() {
 		c.WalletService,
 		c.SettingService,
 		c.Config.Order.PaymentExpireMinutes,
+		c.AffiliateService,
 		c.NotificationService,
 	)
 }

@@ -73,6 +73,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 			public.GET("/banners", publicHandler.GetPublicBanners)
 			public.GET("/categories", publicHandler.GetCategories)
 			public.GET("/captcha/image", publicHandler.GetImageCaptcha)
+			public.POST("/affiliate/click", publicHandler.TrackAffiliateClick)
 		}
 
 		// 游客接口
@@ -129,6 +130,11 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 			user.GET("/wallet/recharges/:recharge_no", publicHandler.GetMyWalletRecharge)
 			user.POST("/wallet/recharge/payments/:id/capture", publicHandler.CaptureMyWalletRechargePayment)
 			user.POST("/gift-cards/redeem", publicHandler.RedeemGiftCard)
+			user.POST("/affiliate/open", publicHandler.OpenAffiliate)
+			user.GET("/affiliate/dashboard", publicHandler.GetAffiliateDashboard)
+			user.GET("/affiliate/commissions", publicHandler.ListAffiliateCommissions)
+			user.GET("/affiliate/withdraws", publicHandler.ListAffiliateWithdraws)
+			user.POST("/affiliate/withdraws", publicHandler.ApplyAffiliateWithdraw)
 		}
 
 		apiV1.POST("/payments/callback", publicHandler.PaymentCallback)
@@ -189,7 +195,18 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 				authorized.GET("/settings/notification-center", adminHandler.GetNotificationCenterSettings)
 				authorized.PUT("/settings/notification-center", adminHandler.UpdateNotificationCenterSettings)
 				authorized.POST("/settings/notification-center/test", adminHandler.TestNotificationCenterSettings)
+				authorized.GET("/settings/affiliate", adminHandler.GetAffiliateSettings)
+				authorized.PUT("/settings/affiliate", adminHandler.UpdateAffiliateSettings)
 				authorized.PUT("/password", adminHandler.UpdateAdminPassword) // 修改密码
+
+				// 推广返利
+				authorized.GET("/affiliates/users", adminHandler.ListAffiliateUsers)
+				authorized.PATCH("/affiliates/users/:id/status", adminHandler.UpdateAffiliateUserStatus)
+				authorized.PATCH("/affiliates/users/batch-status", adminHandler.BatchUpdateAffiliateUserStatus)
+				authorized.GET("/affiliates/commissions", adminHandler.ListAffiliateCommissions)
+				authorized.GET("/affiliates/withdraws", adminHandler.ListAffiliateWithdraws)
+				authorized.POST("/affiliates/withdraws/:id/reject", adminHandler.RejectAffiliateWithdraw)
+				authorized.POST("/affiliates/withdraws/:id/pay", adminHandler.PayAffiliateWithdraw)
 
 				// 权限管理
 				authorized.GET("/authz/me", adminHandler.GetAuthzMe)

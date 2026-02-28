@@ -23,9 +23,11 @@ type OrderItemRequest struct {
 
 // CreateOrderRequest 创建订单请求
 type CreateOrderRequest struct {
-	Items          []OrderItemRequest     `json:"items" binding:"required"`
-	CouponCode     string                 `json:"coupon_code"`
-	ManualFormData map[string]models.JSON `json:"manual_form_data"`
+	Items               []OrderItemRequest     `json:"items" binding:"required"`
+	CouponCode          string                 `json:"coupon_code"`
+	AffiliateCode       string                 `json:"affiliate_code"`
+	AffiliateVisitorKey string                 `json:"affiliate_visitor_key"`
+	ManualFormData      map[string]models.JSON `json:"manual_form_data"`
 }
 
 // PreviewOrder 订单金额预览
@@ -52,11 +54,13 @@ func (h *Handler) PreviewOrder(c *gin.Context) {
 	}
 
 	preview, err := h.OrderService.PreviewOrder(service.CreateOrderInput{
-		UserID:         uid,
-		Items:          items,
-		CouponCode:     req.CouponCode,
-		ClientIP:       c.ClientIP(),
-		ManualFormData: req.ManualFormData,
+		UserID:              uid,
+		Items:               items,
+		CouponCode:          req.CouponCode,
+		AffiliateCode:       req.AffiliateCode,
+		AffiliateVisitorKey: req.AffiliateVisitorKey,
+		ClientIP:            c.ClientIP(),
+		ManualFormData:      req.ManualFormData,
 	})
 	if err != nil {
 		respondUserOrderPreviewError(c, err)
@@ -90,11 +94,13 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 	}
 
 	order, err := h.OrderService.CreateOrder(service.CreateOrderInput{
-		UserID:         uid,
-		Items:          items,
-		CouponCode:     req.CouponCode,
-		ClientIP:       c.ClientIP(),
-		ManualFormData: req.ManualFormData,
+		UserID:              uid,
+		Items:               items,
+		CouponCode:          req.CouponCode,
+		AffiliateCode:       req.AffiliateCode,
+		AffiliateVisitorKey: req.AffiliateVisitorKey,
+		ClientIP:            c.ClientIP(),
+		ManualFormData:      req.ManualFormData,
 	})
 	if err != nil {
 		respondUserOrderCreateError(c, err)

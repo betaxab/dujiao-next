@@ -45,8 +45,8 @@ func setupPaymentServiceWalletTest(t *testing.T) (*PaymentService, *gorm.DB) {
 	channelRepo := repository.NewPaymentChannelRepository(db)
 	walletRepo := repository.NewWalletRepository(db)
 	userRepo := repository.NewUserRepository(db)
-	walletSvc := NewWalletService(walletRepo, orderRepo, userRepo)
-	paymentSvc := NewPaymentService(orderRepo, productRepo, productSKURepo, paymentRepo, channelRepo, walletRepo, nil, walletSvc, nil, 15, nil)
+	walletSvc := NewWalletService(walletRepo, orderRepo, userRepo, nil)
+	paymentSvc := NewPaymentService(orderRepo, productRepo, productSKURepo, paymentRepo, channelRepo, walletRepo, nil, walletSvc, nil, 15, nil, nil)
 
 	return paymentSvc, db
 }

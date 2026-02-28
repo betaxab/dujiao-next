@@ -3,11 +3,17 @@ package worker
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/dujiao-next/internal/config"
+	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/queue"
 
 	"github.com/hibiken/asynq"
+)
+
+const (
+	affiliateConfirmInterval = time.Minute
 )
 
 // Service 异步队列服务
@@ -51,7 +57,9 @@ func (s *Service) Start(ctx context.Context) error {
 	if s == nil || s.server == nil || s.mux == nil {
 		return errors.New("worker not initialized")
 	}
-	_ = ctx
+	if s.consumer != nil && s.consumer.AffiliateService != nil {
+		go s.runAffiliateConfirmLoop(ctx)
+	}
 	return s.server.Run(s.mux)
 }
 
@@ -63,4 +71,27 @@ func (s *Service) Stop(ctx context.Context) error {
 	_ = ctx
 	s.server.Shutdown()
 	return nil
+}
+
+func (s *Service) runAffiliateConfirmLoop(ctx context.Context) {
+	if s == nil || s.consumer == nil || s.consumer.AffiliateService == nil {
+		return
+	}
+	runOnce := func() {
+		if err := s.consumer.AffiliateService.ConfirmDueCommissions(time.Now()); err != nil {
+			logger.Warnw("worker_affiliate_confirm_due_failed", "error", err)
+		}
+	}
+	runOnce()
+
+	ticker := time.NewTicker(affiliateConfirmInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runOnce()
+		}
+	}
 }

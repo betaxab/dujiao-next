@@ -26,6 +26,8 @@ type Order struct {
 	RefundedAmount          Money          `gorm:"type:decimal(20,2);not null;default:0" json:"refunded_amount"`           // 已退款金额（退回钱包）
 	CouponID                *uint          `gorm:"index" json:"coupon_id,omitempty"`                                       // 优惠券ID
 	PromotionID             *uint          `gorm:"index" json:"promotion_id,omitempty"`                                    // 活动价ID（单品订单）
+	AffiliateProfileID      *uint          `gorm:"index" json:"affiliate_profile_id,omitempty"`                            // 推广返利关联用户ID快照
+	AffiliateCode           string         `gorm:"type:varchar(32);index" json:"affiliate_code,omitempty"`                 // 推广返利联盟ID快照
 	ClientIP                string         `gorm:"type:varchar(64)" json:"client_ip,omitempty"`                            // 下单客户端IP
 	ExpiresAt               *time.Time     `gorm:"index" json:"expires_at"`                                                // 过期时间
 	PaidAt                  *time.Time     `gorm:"index" json:"paid_at"`                                                   // 支付时间

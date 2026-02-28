@@ -32,11 +32,12 @@ type OrderService struct {
 	queueClient     *queue.Client
 	settingService  *SettingService
 	walletService   *WalletService
+	affiliateSvc    *AffiliateService
 	expireMinutes   int
 }
 
 // NewOrderService 创建订单服务
-func NewOrderService(orderRepo repository.OrderRepository, productRepo repository.ProductRepository, productSKURepo repository.ProductSKURepository, cardSecretRepo repository.CardSecretRepository, couponRepo repository.CouponRepository, couponUsageRepo repository.CouponUsageRepository, promotionRepo repository.PromotionRepository, queueClient *queue.Client, settingService *SettingService, walletService *WalletService, expireMinutes int) *OrderService {
+func NewOrderService(orderRepo repository.OrderRepository, productRepo repository.ProductRepository, productSKURepo repository.ProductSKURepository, cardSecretRepo repository.CardSecretRepository, couponRepo repository.CouponRepository, couponUsageRepo repository.CouponUsageRepository, promotionRepo repository.PromotionRepository, queueClient *queue.Client, settingService *SettingService, walletService *WalletService, affiliateSvc *AffiliateService, expireMinutes int) *OrderService {
 	return &OrderService{
 		orderRepo:       orderRepo,
 		productRepo:     productRepo,
@@ -48,28 +49,33 @@ func NewOrderService(orderRepo repository.OrderRepository, productRepo repositor
 		queueClient:     queueClient,
 		settingService:  settingService,
 		walletService:   walletService,
+		affiliateSvc:    affiliateSvc,
 		expireMinutes:   expireMinutes,
 	}
 }
 
 // CreateOrderInput 创建订单输入
 type CreateOrderInput struct {
-	UserID         uint
-	Items          []CreateOrderItem
-	CouponCode     string
-	ClientIP       string
-	ManualFormData map[string]models.JSON
+	UserID              uint
+	Items               []CreateOrderItem
+	CouponCode          string
+	AffiliateCode       string
+	AffiliateVisitorKey string
+	ClientIP            string
+	ManualFormData      map[string]models.JSON
 }
 
 // CreateGuestOrderInput 游客创建订单输入
 type CreateGuestOrderInput struct {
-	Email          string
-	OrderPassword  string
-	Locale         string
-	Items          []CreateOrderItem
-	CouponCode     string
-	ClientIP       string
-	ManualFormData map[string]models.JSON
+	Email               string
+	OrderPassword       string
+	Locale              string
+	Items               []CreateOrderItem
+	CouponCode          string
+	AffiliateCode       string
+	AffiliateVisitorKey string
+	ClientIP            string
+	ManualFormData      map[string]models.JSON
 }
 
 // CreateOrderItem 创建订单项输入
@@ -120,11 +126,13 @@ func (s *OrderService) CreateOrder(input CreateOrderInput) (*models.Order, error
 		return nil, ErrInvalidOrderItem
 	}
 	return s.createOrder(orderCreateParams{
-		UserID:         input.UserID,
-		Items:          input.Items,
-		CouponCode:     input.CouponCode,
-		ClientIP:       input.ClientIP,
-		ManualFormData: input.ManualFormData,
+		UserID:              input.UserID,
+		Items:               input.Items,
+		CouponCode:          input.CouponCode,
+		AffiliateCode:       input.AffiliateCode,
+		AffiliateVisitorKey: input.AffiliateVisitorKey,
+		ClientIP:            input.ClientIP,
+		ManualFormData:      input.ManualFormData,
 	})
 }
 
@@ -140,28 +148,32 @@ func (s *OrderService) CreateGuestOrder(input CreateGuestOrderInput) (*models.Or
 	}
 	locale := strings.TrimSpace(input.Locale)
 	return s.createOrder(orderCreateParams{
-		UserID:         0,
-		GuestEmail:     email,
-		GuestPassword:  password,
-		GuestLocale:    locale,
-		Items:          input.Items,
-		CouponCode:     input.CouponCode,
-		ClientIP:       input.ClientIP,
-		IsGuest:        true,
-		ManualFormData: input.ManualFormData,
+		UserID:              0,
+		GuestEmail:          email,
+		GuestPassword:       password,
+		GuestLocale:         locale,
+		Items:               input.Items,
+		CouponCode:          input.CouponCode,
+		AffiliateCode:       input.AffiliateCode,
+		AffiliateVisitorKey: input.AffiliateVisitorKey,
+		ClientIP:            input.ClientIP,
+		IsGuest:             true,
+		ManualFormData:      input.ManualFormData,
 	})
 }
 
 type orderCreateParams struct {
-	UserID         uint
-	GuestEmail     string
-	GuestPassword  string
-	GuestLocale    string
-	Items          []CreateOrderItem
-	CouponCode     string
-	ClientIP       string
-	IsGuest        bool
-	ManualFormData map[string]models.JSON
+	UserID              uint
+	GuestEmail          string
+	GuestPassword       string
+	GuestLocale         string
+	Items               []CreateOrderItem
+	CouponCode          string
+	AffiliateCode       string
+	AffiliateVisitorKey string
+	ClientIP            string
+	IsGuest             bool
+	ManualFormData      map[string]models.JSON
 }
 
 // OrderPreview 订单金额预览
@@ -207,25 +219,29 @@ func (s *OrderService) PreviewOrder(input CreateOrderInput) (*OrderPreview, erro
 		return nil, ErrInvalidOrderItem
 	}
 	return s.previewOrder(orderCreateParams{
-		UserID:         input.UserID,
-		Items:          input.Items,
-		CouponCode:     input.CouponCode,
-		ClientIP:       input.ClientIP,
-		ManualFormData: input.ManualFormData,
+		UserID:              input.UserID,
+		Items:               input.Items,
+		CouponCode:          input.CouponCode,
+		AffiliateCode:       input.AffiliateCode,
+		AffiliateVisitorKey: input.AffiliateVisitorKey,
+		ClientIP:            input.ClientIP,
+		ManualFormData:      input.ManualFormData,
 	})
 }
 
 // PreviewGuestOrder 游客订单金额预览
 func (s *OrderService) PreviewGuestOrder(input CreateGuestOrderInput) (*OrderPreview, error) {
 	return s.previewOrder(orderCreateParams{
-		GuestEmail:     input.Email,
-		GuestPassword:  input.OrderPassword,
-		GuestLocale:    input.Locale,
-		Items:          input.Items,
-		CouponCode:     input.CouponCode,
-		ClientIP:       input.ClientIP,
-		IsGuest:        true,
-		ManualFormData: input.ManualFormData,
+		GuestEmail:          input.Email,
+		GuestPassword:       input.OrderPassword,
+		GuestLocale:         input.Locale,
+		Items:               input.Items,
+		CouponCode:          input.CouponCode,
+		AffiliateCode:       input.AffiliateCode,
+		AffiliateVisitorKey: input.AffiliateVisitorKey,
+		ClientIP:            input.ClientIP,
+		IsGuest:             true,
+		ManualFormData:      input.ManualFormData,
 	})
 }
 
@@ -269,6 +285,17 @@ func (s *OrderService) createOrder(input orderCreateParams) (*models.Order, erro
 	if err != nil {
 		return nil, err
 	}
+	affiliateCode := normalizeAffiliateCode(input.AffiliateCode)
+	affiliateVisitorKey := strings.TrimSpace(input.AffiliateVisitorKey)
+	var affiliateProfileID *uint
+	if s.affiliateSvc != nil {
+		resolvedID, resolvedCode, resolveErr := s.affiliateSvc.ResolveOrderAffiliateSnapshot(input.UserID, affiliateCode, affiliateVisitorKey)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		affiliateProfileID = resolvedID
+		affiliateCode = resolvedCode
+	}
 
 	if len(input.Items) == 0 {
 		return nil, ErrInvalidOrderItem
@@ -303,6 +330,8 @@ func (s *OrderService) createOrder(input orderCreateParams) (*models.Order, erro
 		RefundedAmount:          models.NewMoneyFromDecimal(decimal.Zero),
 		CouponID:                nil,
 		PromotionID:             result.OrderPromotionID,
+		AffiliateProfileID:      affiliateProfileID,
+		AffiliateCode:           affiliateCode,
 		ExpiresAt:               &expiresAt,
 		ClientIP:                strings.TrimSpace(input.ClientIP),
 		CreatedAt:               now,
@@ -343,6 +372,8 @@ func (s *OrderService) createOrder(input orderCreateParams) (*models.Order, erro
 				RefundedAmount:          models.NewMoneyFromDecimal(decimal.Zero),
 				CouponID:                nil,
 				PromotionID:             plan.Item.PromotionID,
+				AffiliateProfileID:      affiliateProfileID,
+				AffiliateCode:           affiliateCode,
 				ExpiresAt:               &expiresAt,
 				ClientIP:                order.ClientIP,
 				CreatedAt:               now,
@@ -686,6 +717,17 @@ func normalizeGuestEmail(raw string) (string, error) {
 	return normalized, nil
 }
 
+func normalizeAffiliateCode(raw string) string {
+	code := strings.TrimSpace(raw)
+	if code == "" {
+		return ""
+	}
+	if len(code) > 32 {
+		return code[:32]
+	}
+	return code
+}
+
 func (s *OrderService) resolveExpireMinutes() int {
 	defaultMinutes := s.expireMinutes
 	if defaultMinutes <= 0 {
@@ -894,6 +936,14 @@ func (s *OrderService) CancelOrder(orderID uint, userID uint) (*models.Order, er
 	if err := s.cancelOrderWithChildren(order, false); err != nil {
 		return nil, ErrOrderUpdateFailed
 	}
+	if s.affiliateSvc != nil {
+		if err := s.affiliateSvc.HandleOrderCanceled(order.ID, "order_canceled_by_user"); err != nil {
+			logger.Warnw("affiliate_handle_order_canceled_failed",
+				"order_id", order.ID,
+				"error", err,
+			)
+		}
+	}
 	if s.queueClient != nil {
 		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {
 			logger.Warnw("order_enqueue_status_email_failed",
@@ -931,6 +981,14 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 		case constants.OrderStatusCanceled:
 			if err := s.cancelOrderWithChildren(order, true); err != nil {
 				return nil, ErrOrderUpdateFailed
+			}
+			if s.affiliateSvc != nil {
+				if err := s.affiliateSvc.HandleOrderCanceled(order.ID, "order_canceled_by_admin"); err != nil {
+					logger.Warnw("affiliate_handle_order_canceled_failed",
+						"order_id", order.ID,
+						"error", err,
+					)
+				}
 			}
 			if s.queueClient != nil {
 				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {
@@ -976,6 +1034,14 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 						"order_id", order.ID,
 						"target_order_id", order.ID,
 						"status", constants.OrderStatusPaid,
+						"error", err,
+					)
+				}
+			}
+			if s.affiliateSvc != nil {
+				if err := s.affiliateSvc.HandleOrderPaid(order.ID); err != nil {
+					logger.Warnw("affiliate_handle_order_paid_failed",
+						"order_id", order.ID,
 						"error", err,
 					)
 				}
@@ -1046,6 +1112,22 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 	}
 	if err != nil {
 		return nil, ErrOrderUpdateFailed
+	}
+	if target == constants.OrderStatusPaid && s.affiliateSvc != nil {
+		if err := s.affiliateSvc.HandleOrderPaid(order.ID); err != nil {
+			logger.Warnw("affiliate_handle_order_paid_failed",
+				"order_id", order.ID,
+				"error", err,
+			)
+		}
+	}
+	if target == constants.OrderStatusCanceled && s.affiliateSvc != nil {
+		if err := s.affiliateSvc.HandleOrderCanceled(order.ID, "order_canceled_by_admin"); err != nil {
+			logger.Warnw("affiliate_handle_order_canceled_failed",
+				"order_id", order.ID,
+				"error", err,
+			)
+		}
 	}
 	order.Status = target
 	order.UpdatedAt = now
@@ -1193,6 +1275,14 @@ func (s *OrderService) CancelExpiredOrder(orderID uint) (*models.Order, error) {
 	}
 	if err := s.cancelOrderWithChildren(order, true); err != nil {
 		return nil, err
+	}
+	if s.affiliateSvc != nil {
+		if err := s.affiliateSvc.HandleOrderCanceled(order.ID, "order_expired_canceled"); err != nil {
+			logger.Warnw("affiliate_handle_order_canceled_failed",
+				"order_id", order.ID,
+				"error", err,
+			)
+		}
 	}
 	if s.queueClient != nil {
 		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {

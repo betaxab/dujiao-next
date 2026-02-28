@@ -44,6 +44,7 @@ type CreateProductInput struct {
 	FulfillmentType      string
 	ManualStockTotal     *int
 	SKUs                 []ProductSKUInput
+	IsAffiliateEnabled   *bool
 	IsActive             *bool
 	SortOrder            int
 }
@@ -124,6 +125,10 @@ func (s *ProductService) Create(input CreateProductInput) (*models.Product, erro
 	if input.IsActive != nil {
 		isActive = *input.IsActive
 	}
+	isAffiliateEnabled := false
+	if input.IsAffiliateEnabled != nil {
+		isAffiliateEnabled = *input.IsAffiliateEnabled
+	}
 	purchaseType := normalizePurchaseType(input.PurchaseType)
 	if purchaseType == "" {
 		return nil, ErrProductPurchaseInvalid
@@ -174,6 +179,7 @@ func (s *ProductService) Create(input CreateProductInput) (*models.Product, erro
 		ManualStockTotal:     manualStockTotal,
 		ManualStockLocked:    0,
 		ManualStockSold:      0,
+		IsAffiliateEnabled:   isAffiliateEnabled,
 		IsActive:             isActive,
 		SortOrder:            input.SortOrder,
 	}
@@ -239,6 +245,9 @@ func (s *ProductService) Update(id string, input CreateProductInput) (*models.Pr
 	product.Tags = models.StringArray(input.Tags)
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive
+	}
+	if input.IsAffiliateEnabled != nil {
+		product.IsAffiliateEnabled = *input.IsAffiliateEnabled
 	}
 	rawPurchaseType := strings.TrimSpace(input.PurchaseType)
 	if rawPurchaseType == "" {

@@ -103,6 +103,13 @@ func (h *Handler) GetConfig(c *gin.Context) {
 	}
 	data["telegram_auth"] = telegramAuthConfig
 
+	affiliateSetting, err := h.SettingService.GetAffiliateSetting()
+	if err != nil {
+		respondError(c, response.CodeInternal, "error.config_fetch_failed", err)
+		return
+	}
+	data["affiliate"] = service.AffiliateSettingToMap(affiliateSetting)
+
 	_ = cache.SetJSON(c.Request.Context(), publicConfigCacheKey, data, publicConfigCacheTTL)
 	response.Success(c, data)
 }
@@ -383,12 +390,14 @@ func (h *Handler) GetCategories(c *gin.Context) {
 
 // CreateGuestOrderRequest 游客下单请求
 type CreateGuestOrderRequest struct {
-	Email          string                 `json:"email" binding:"required"`
-	OrderPassword  string                 `json:"order_password" binding:"required"`
-	Items          []OrderItemRequest     `json:"items" binding:"required"`
-	CouponCode     string                 `json:"coupon_code"`
-	ManualFormData map[string]models.JSON `json:"manual_form_data"`
-	CaptchaPayload CaptchaPayloadRequest  `json:"captcha_payload"`
+	Email               string                 `json:"email" binding:"required"`
+	OrderPassword       string                 `json:"order_password" binding:"required"`
+	Items               []OrderItemRequest     `json:"items" binding:"required"`
+	CouponCode          string                 `json:"coupon_code"`
+	AffiliateCode       string                 `json:"affiliate_code"`
+	AffiliateVisitorKey string                 `json:"affiliate_visitor_key"`
+	ManualFormData      map[string]models.JSON `json:"manual_form_data"`
+	CaptchaPayload      CaptchaPayloadRequest  `json:"captcha_payload"`
 }
 
 // CreateGuestOrder 游客创建订单
@@ -426,13 +435,15 @@ func (h *Handler) CreateGuestOrder(c *gin.Context) {
 		})
 	}
 	order, err := h.OrderService.CreateGuestOrder(service.CreateGuestOrderInput{
-		Email:          req.Email,
-		OrderPassword:  req.OrderPassword,
-		Locale:         i18n.ResolveLocale(c),
-		Items:          items,
-		CouponCode:     req.CouponCode,
-		ClientIP:       c.ClientIP(),
-		ManualFormData: req.ManualFormData,
+		Email:               req.Email,
+		OrderPassword:       req.OrderPassword,
+		Locale:              i18n.ResolveLocale(c),
+		Items:               items,
+		CouponCode:          req.CouponCode,
+		AffiliateCode:       req.AffiliateCode,
+		AffiliateVisitorKey: req.AffiliateVisitorKey,
+		ClientIP:            c.ClientIP(),
+		ManualFormData:      req.ManualFormData,
 	})
 	if err != nil {
 		respondGuestOrderCreateError(c, err)
@@ -458,13 +469,15 @@ func (h *Handler) PreviewGuestOrder(c *gin.Context) {
 		})
 	}
 	preview, err := h.OrderService.PreviewGuestOrder(service.CreateGuestOrderInput{
-		Email:          req.Email,
-		OrderPassword:  req.OrderPassword,
-		Locale:         i18n.ResolveLocale(c),
-		Items:          items,
-		CouponCode:     req.CouponCode,
-		ClientIP:       c.ClientIP(),
-		ManualFormData: req.ManualFormData,
+		Email:               req.Email,
+		OrderPassword:       req.OrderPassword,
+		Locale:              i18n.ResolveLocale(c),
+		Items:               items,
+		CouponCode:          req.CouponCode,
+		AffiliateCode:       req.AffiliateCode,
+		AffiliateVisitorKey: req.AffiliateVisitorKey,
+		ClientIP:            c.ClientIP(),
+		ManualFormData:      req.ManualFormData,
 	})
 	if err != nil {
 		respondGuestOrderPreviewError(c, err)

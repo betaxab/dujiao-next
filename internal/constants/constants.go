@@ -85,6 +85,38 @@ const (
 	WalletRechargeStatusExpired = "expired"
 )
 
+// 推广返利状态常量
+const (
+	AffiliateProfileStatusActive   = "active"
+	AffiliateProfileStatusDisabled = "disabled"
+)
+
+// 推广返利佣金状态常量
+const (
+	AffiliateCommissionStatusPendingConfirm = "pending_confirm"
+	AffiliateCommissionStatusAvailable      = "available"
+	AffiliateCommissionStatusRejected       = "rejected"
+	AffiliateCommissionStatusWithdrawn      = "withdrawn"
+)
+
+// 推广返利佣金类型常量
+const (
+	AffiliateCommissionTypeOrder = "order"
+)
+
+// 推广返利提现状态常量
+const (
+	AffiliateWithdrawStatusPendingReview = "pending_review"
+	AffiliateWithdrawStatusRejected      = "rejected"
+	AffiliateWithdrawStatusPaid          = "paid"
+)
+
+// 推广返利提现审核动作常量
+const (
+	AffiliateWithdrawActionReject = "reject"
+	AffiliateWithdrawActionPay    = "pay"
+)
+
 // 易支付回调常量
 const (
 	EpayTradeStatusSuccess = "TRADE_SUCCESS"
@@ -264,6 +296,7 @@ const (
 	SettingKeyTelegramAuthConfig       = "telegram_auth_config"
 	SettingKeyDashboardConfig          = "dashboard_config"
 	SettingKeyNotificationCenterConfig = "notification_center_config"
+	SettingKeyAffiliateConfig          = "affiliate_config"
 	SettingFieldSiteCurrency           = "currency"
 	SettingFieldPaymentExpireMinutes   = "payment_expire_minutes"
 )

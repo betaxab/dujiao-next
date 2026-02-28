@@ -27,6 +27,9 @@ func setupWalletServiceTest(t *testing.T) (*WalletService, *gorm.DB) {
 		&models.Order{},
 		&models.OrderItem{},
 		&models.Fulfillment{},
+		&models.AffiliateProfile{},
+		&models.AffiliateCommission{},
+		&models.AffiliateWithdrawRequest{},
 		&models.WalletAccount{},
 		&models.WalletTransaction{},
 	); err != nil {
@@ -36,7 +39,8 @@ func setupWalletServiceTest(t *testing.T) (*WalletService, *gorm.DB) {
 	walletRepo := repository.NewWalletRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	userRepo := repository.NewUserRepository(db)
-	return NewWalletService(walletRepo, orderRepo, userRepo), db
+	affiliateSvc := NewAffiliateService(repository.NewAffiliateRepository(db), nil, nil, nil, nil)
+	return NewWalletService(walletRepo, orderRepo, userRepo, affiliateSvc), db
 }
 
 func createTestUser(t *testing.T, db *gorm.DB, id uint) {
@@ -183,6 +187,7 @@ func TestWalletServiceApplyAndReleaseOrderBalance(t *testing.T) {
 func TestWalletServiceAdminRefundToWallet(t *testing.T) {
 	svc, db := setupWalletServiceTest(t)
 	createTestUser(t, db, 104)
+	createTestUser(t, db, 204)
 	order := createTestOrder(t, db, 104, "DJTESTREFUND001", decimal.NewFromInt(40))
 	paidAt := time.Now()
 	if err := db.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
@@ -190,6 +195,30 @@ func TestWalletServiceAdminRefundToWallet(t *testing.T) {
 		"paid_at": paidAt,
 	}).Error; err != nil {
 		t.Fatalf("update order status failed: %v", err)
+	}
+	profile := models.AffiliateProfile{
+		UserID:        204,
+		AffiliateCode: "AFFT104A",
+		Status:        constants.AffiliateProfileStatusActive,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	if err := db.Create(&profile).Error; err != nil {
+		t.Fatalf("create affiliate profile failed: %v", err)
+	}
+	commission := models.AffiliateCommission{
+		AffiliateProfileID: profile.ID,
+		OrderID:            order.ID,
+		CommissionType:     constants.AffiliateCommissionTypeOrder,
+		BaseAmount:         models.NewMoneyFromDecimal(decimal.NewFromInt(40)),
+		RatePercent:        models.NewMoneyFromDecimal(decimal.NewFromInt(50)),
+		CommissionAmount:   models.NewMoneyFromDecimal(decimal.NewFromInt(20)),
+		Status:             constants.AffiliateCommissionStatusAvailable,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+	if err := db.Create(&commission).Error; err != nil {
+		t.Fatalf("create affiliate commission failed: %v", err)
 	}
 
 	updatedOrder, txn, err := svc.AdminRefundToWallet(AdminRefundToWalletInput{
@@ -205,6 +234,16 @@ func TestWalletServiceAdminRefundToWallet(t *testing.T) {
 	}
 	if !updatedOrder.RefundedAmount.Decimal.Equal(decimal.NewFromInt(15)) {
 		t.Fatalf("unexpected refunded amount: %s", updatedOrder.RefundedAmount.String())
+	}
+	var refreshedCommission models.AffiliateCommission
+	if err := db.First(&refreshedCommission, commission.ID).Error; err != nil {
+		t.Fatalf("reload affiliate commission failed: %v", err)
+	}
+	if !refreshedCommission.CommissionAmount.Decimal.Equal(decimal.RequireFromString("12.50")) {
+		t.Fatalf("unexpected commission amount after refund: %s", refreshedCommission.CommissionAmount.String())
+	}
+	if refreshedCommission.Status != constants.AffiliateCommissionStatusAvailable {
+		t.Fatalf("unexpected commission status after partial refund: %s", refreshedCommission.Status)
 	}
 
 	_, _, err = svc.AdminRefundToWallet(AdminRefundToWalletInput{

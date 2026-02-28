@@ -54,7 +54,7 @@ func setupAdminPaymentHandlerTest(t *testing.T) (*Handler, *gorm.DB) {
 	paymentRepo := repository.NewPaymentRepository(db)
 	paymentChannelRepo := repository.NewPaymentChannelRepository(db)
 	walletRepo := repository.NewWalletRepository(db)
-	paymentService := service.NewPaymentService(nil, nil, nil, paymentRepo, paymentChannelRepo, walletRepo, nil, nil, nil, 15, nil)
+	paymentService := service.NewPaymentService(nil, nil, nil, paymentRepo, paymentChannelRepo, walletRepo, nil, nil, nil, 15, nil, nil)
 
 	h := &Handler{Container: &provider.Container{
 		PaymentService:     paymentService,
