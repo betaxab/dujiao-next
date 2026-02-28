@@ -673,11 +673,19 @@ func (s *ProductService) ApplyAutoStockCounts(products []models.Product) error {
 		for j := range products[i].SKUs {
 			skuID := products[i].SKUs[j].ID
 			statusMap := pMap[skuID]
-			// 如果 skuID 为 0 的卡密存在，则合并到所有 SKU 中（旧数据兼容）或者合并到第一个 SKU
-			// 根据业务逻辑如果是单规格默认 skuID 为 0， 这里为匹配精确 SKU + 通用 SKU(id=0)
-			available := statusMap[models.CardSecretStatusAvailable] + pMap[0][models.CardSecretStatusAvailable]
-			locked := statusMap[models.CardSecretStatusReserved] + pMap[0][models.CardSecretStatusReserved]
-			used := statusMap[models.CardSecretStatusUsed] + pMap[0][models.CardSecretStatusUsed]
+
+			available := statusMap[models.CardSecretStatusAvailable]
+			locked := statusMap[models.CardSecretStatusReserved]
+			used := statusMap[models.CardSecretStatusUsed]
+
+			// 如果 skuID 为 0 的卡密存在，则合并到第一个 SKU
+			// 避免将通用 SKU 的数量重复加到所有 SKU 上
+			if j == 0 && pMap[0] != nil {
+				available += pMap[0][models.CardSecretStatusAvailable]
+				locked += pMap[0][models.CardSecretStatusReserved]
+				used += pMap[0][models.CardSecretStatusUsed]
+			}
+
 			products[i].SKUs[j].AutoStockAvailable = available
 			products[i].SKUs[j].AutoStockTotal = available + locked
 			products[i].SKUs[j].AutoStockLocked = locked
