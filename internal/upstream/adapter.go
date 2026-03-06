@@ -96,6 +96,8 @@ type UpstreamOrderDetail struct {
 	OrderID     uint                 `json:"order_id"`
 	OrderNo     string               `json:"order_no"`
 	Status      string               `json:"status"`
+	Amount      string               `json:"amount"`
+	Currency    string               `json:"currency"`
 	Fulfillment *UpstreamFulfillment `json:"fulfillment,omitempty"`
 }
 

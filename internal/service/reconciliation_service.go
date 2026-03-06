@@ -13,6 +13,7 @@ import (
 	"github.com/dujiao-next/internal/queue"
 	"github.com/dujiao-next/internal/repository"
 	"github.com/dujiao-next/internal/upstream"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -204,9 +205,16 @@ func (s *ReconciliationService) compareOrder(job *models.ReconciliationJob, po *
 		statusMismatch = !isStatusConsistent(po.Status, detail.Status)
 	}
 
+	// 金额对比：本地记录的采购价 vs 上游实际返回的金额
+	// 注意：不能拿 LocalSellAmount（本地售价）和 UpstreamAmount（采购价）比，两者有利润差是正常的
 	amountMismatch := false
-	if checkAmount && po.LocalSellAmount.IsPositive() && po.UpstreamAmount.IsPositive() {
-		amountMismatch = !po.LocalSellAmount.Equal(po.UpstreamAmount.Decimal)
+	var upstreamActualAmount models.Money
+	if checkAmount && detail.Amount != "" {
+		upstreamDecimal, parseErr := decimal.NewFromString(detail.Amount)
+		if parseErr == nil && upstreamDecimal.IsPositive() && po.UpstreamAmount.IsPositive() {
+			upstreamActualAmount = models.NewMoneyFromDecimal(upstreamDecimal)
+			amountMismatch = !po.UpstreamAmount.Equal(upstreamDecimal)
+		}
 	}
 
 	var mismatchType string
@@ -229,8 +237,8 @@ func (s *ReconciliationService) compareOrder(job *models.ReconciliationJob, po *
 		UpstreamOrderNo:    po.UpstreamOrderNo,
 		LocalStatus:        po.Status,
 		UpstreamStatus:     detail.Status,
-		LocalAmount:        po.LocalSellAmount,
-		UpstreamAmount:     po.UpstreamAmount,
+		LocalAmount:        po.UpstreamAmount,
+		UpstreamAmount:     upstreamActualAmount,
 		MismatchType:       mismatchType,
 	}
 }

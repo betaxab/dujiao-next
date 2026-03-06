@@ -116,6 +116,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 		if notifyURL == "" || returnURL == "" {
 			return fmt.Errorf("%w: notify_url/return_url is required", ErrPaymentChannelConfigInvalid)
 		}
+		returnURL = appendURLQuery(returnURL, buildOrderReturnQuery(order, "epusdt_return", ""))
 		ctx := input.Context
 		if ctx == nil {
 			ctx = context.Background()
