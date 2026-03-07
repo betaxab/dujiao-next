@@ -27,27 +27,6 @@ func TestParseConfigAndNormalizeDefaults(t *testing.T) {
 	}
 }
 
-func TestResolveTradeType(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		expect string
-	}{
-		{name: "USDT", input: epusdtChannelTypeUSDT, expect: epusdtTradeTypeUSDTTRC20},
-		{name: "USDTTRC20", input: epusdtChannelTypeUSDTTRC20, expect: epusdtTradeTypeUSDTTRC20},
-		{name: "USDCTRC20", input: epusdtChannelTypeUSDCTRC20, expect: epusdtTradeTypeUSDCTRC20},
-		{name: "TRX", input: epusdtChannelTypeTRX, expect: epusdtTradeTypeTRX},
-		{name: "Unknown", input: "unknown", expect: ""},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := ResolveTradeType(tc.input); got != tc.expect {
-				t.Fatalf("unexpected trade type: got %s, want %s", got, tc.expect)
-			}
-		})
-	}
-}
-
 func TestToPaymentStatus(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -68,20 +47,3 @@ func TestToPaymentStatus(t *testing.T) {
 	}
 }
 
-func TestIsSupportedTradeType(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		expect bool
-	}{
-		{name: "Known", input: epusdtTradeTypeUSDTTRC20, expect: true},
-		{name: "UnknownStillAllowed", input: "custom.chain.asset", expect: true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := IsSupportedTradeType(tc.input); got != tc.expect {
-				t.Fatalf("unexpected support flag: got %v, want %v", got, tc.expect)
-			}
-		})
-	}
-}

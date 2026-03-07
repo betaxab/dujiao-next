@@ -56,6 +56,7 @@ const (
 	PaymentChannelTypePaypal    = "paypal"
 	PaymentChannelTypeStripe    = "stripe"
 	PaymentChannelTypeQqpay     = "qqpay"
+	PaymentChannelTypeBEpusdt   = "bepusdt"
 	PaymentChannelTypeUsdt      = "usdt"
 	PaymentChannelTypeUsdtTrc20 = "usdt-trc20"
 	PaymentChannelTypeUsdcTrc20 = "usdc-trc20"

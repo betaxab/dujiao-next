@@ -161,10 +161,6 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
-		// 如果配置中没有指定 trade_type，根据 channel_type 自动设置
-		if strings.TrimSpace(cfg.TradeType) == "" {
-			cfg.TradeType = epusdt.ResolveTradeType(channel.ChannelType)
-		}
 		if err := epusdt.ValidateConfig(cfg); err != nil {
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
@@ -582,9 +578,6 @@ func (s *PaymentService) ValidateChannel(channel *models.PaymentChannel) error {
 		}
 		return nil
 	case constants.PaymentProviderEpusdt:
-		if !epusdt.IsSupportedChannelType(channel.ChannelType) {
-			return fmt.Errorf("%w: unsupported channel_type %s", ErrPaymentChannelConfigInvalid, channel.ChannelType)
-		}
 		if strings.ToLower(strings.TrimSpace(channel.InteractionMode)) != constants.PaymentInteractionRedirect &&
 			strings.ToLower(strings.TrimSpace(channel.InteractionMode)) != constants.PaymentInteractionQR {
 			return ErrPaymentChannelConfigInvalid

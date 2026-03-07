@@ -33,22 +33,6 @@ const (
 	StatusExpired = 3 // 支付超时
 
 	epusdtTradeTypeUSDTTRC20 = "usdt.trc20"
-	epusdtTradeTypeUSDTERC20 = "usdt.erc20"
-	epusdtTradeTypeUSDTBEP20 = "usdt.bep20"
-	epusdtTradeTypeUSDTPOLY  = "usdt.polygon"
-	epusdtTradeTypeUSDCTRC20 = "usdc.trc20"
-	epusdtTradeTypeUSDCERC20 = "usdc.erc20"
-	epusdtTradeTypeUSDCPOLY  = "usdc.polygon"
-	epusdtTradeTypeUSDCBEP20 = "usdc.bep20"
-	epusdtTradeTypeTRX       = "tron.trx"
-	epusdtTradeTypeETH       = "eth.eth"
-	epusdtTradeTypeBNB       = "bsc.bnb"
-
-	epusdtChannelTypeUSDT      = "usdt"
-	epusdtChannelTypeUSDTTRC20 = "usdt-trc20"
-	epusdtChannelTypeUSDCTRC20 = "usdc-trc20"
-	epusdtChannelTypeTRX       = "trx"
-
 	epusdtCreateTransactionPath = "/api/v1/order/create-transaction"
 	epusdtStatusSuccessMsg      = "status is not success"
 )
@@ -359,40 +343,14 @@ func postJSON(ctx context.Context, endpoint string, params map[string]interface{
 	return io.ReadAll(resp.Body)
 }
 
-// IsSupportedChannelType 判断是否支持的渠道类型
+// IsSupportedChannelType 判断是否支持的渠道类型（不启用）
 func IsSupportedChannelType(channelType string) bool {
-	return ResolveTradeType(channelType) != ""
-}
-
-// ResolveTradeType 根据 channel_type 解析 trade_type
-func ResolveTradeType(channelType string) string {
 	switch strings.ToLower(strings.TrimSpace(channelType)) {
-	case epusdtChannelTypeUSDT, epusdtChannelTypeUSDTTRC20:
-		return epusdtTradeTypeUSDTTRC20
-	case epusdtChannelTypeUSDCTRC20:
-		return epusdtTradeTypeUSDCTRC20
-	case epusdtChannelTypeTRX:
-		return epusdtTradeTypeTRX
+	case constants.PaymentChannelTypeBEpusdt:
+		return true
 	default:
-		return ""
+		return false
 	}
-}
-
-// IsSupportedTradeType 判断是否支持的交易类型
-func IsSupportedTradeType(tradeType string) bool {
-	supported := []string{
-		epusdtTradeTypeUSDTTRC20, epusdtTradeTypeUSDTERC20, epusdtTradeTypeUSDTBEP20, epusdtTradeTypeUSDTPOLY,
-		epusdtTradeTypeTRX, epusdtTradeTypeETH, epusdtTradeTypeBNB,
-		epusdtTradeTypeUSDCTRC20, epusdtTradeTypeUSDCERC20, epusdtTradeTypeUSDCPOLY, epusdtTradeTypeUSDCBEP20,
-	}
-	t := strings.ToLower(strings.TrimSpace(tradeType))
-	for _, s := range supported {
-		if s == t {
-			return true
-		}
-	}
-	// 允许任意 trade_type，由 BEpusdt 服务端校验
-	return true
 }
 
 // ToPaymentStatus 将 BEpusdt 状态转换为支付状态
