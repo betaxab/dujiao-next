@@ -106,7 +106,7 @@ func (r *GormProductRepository) List(filter ProductListFilter) ([]models.Product
 
 	query = applyPagination(query, filter.Page, filter.PageSize)
 
-	if err := query.Order("sort_order DESC, created_at DESC").Find(&products).Error; err != nil {
+	if err := query.Order("sort_order DESC, slug ASC").Find(&products).Error; err != nil {
 		return nil, 0, err
 	}
 
