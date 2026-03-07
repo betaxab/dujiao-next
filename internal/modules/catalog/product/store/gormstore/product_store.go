@@ -110,7 +110,7 @@ func (r *ProductStore) List(filter productcontract.ListFilter) ([]productdomain.
 
 	query = gormutil.ApplyPagination(query, filter.Page, filter.PageSize)
 
-	if err := query.Order("sort_order DESC, created_at DESC").Find(&products).Error; err != nil {
+	if err := query.Order("sort_order DESC, slug ASC").Find(&products).Error; err != nil {
 		return nil, 0, err
 	}
 
