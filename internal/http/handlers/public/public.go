@@ -30,18 +30,28 @@ type PublicSKUView struct {
 	PromotionPriceAmount *models.Money `json:"promotion_price_amount,omitempty"`
 }
 
+// PromotionRuleView 活动规则展示结构
+type PromotionRuleView struct {
+	ID        uint         `json:"id"`
+	Name      string       `json:"name"`
+	Type      string       `json:"type"`
+	Value     models.Money `json:"value"`
+	MinAmount models.Money `json:"min_amount"`
+}
+
 // PublicProductView 公共商品响应结构
 type PublicProductView struct {
 	models.Product
-	PromotionID          *uint            `json:"promotion_id,omitempty"`
-	PromotionName        string           `json:"promotion_name,omitempty"`
-	PromotionType        string           `json:"promotion_type,omitempty"`
-	PromotionPriceAmount *models.Money    `json:"promotion_price_amount,omitempty"`
-	PublicSKUs           *[]PublicSKUView `json:"skus,omitempty"`
-	ManualStockAvailable int              `json:"manual_stock_available"`
-	AutoStockAvailable   int64            `json:"auto_stock_available"`
-	StockStatus          string           `json:"stock_status"`
-	IsSoldOut            bool             `json:"is_sold_out"`
+	PromotionID          *uint               `json:"promotion_id,omitempty"`
+	PromotionName        string              `json:"promotion_name,omitempty"`
+	PromotionType        string              `json:"promotion_type,omitempty"`
+	PromotionPriceAmount *models.Money       `json:"promotion_price_amount,omitempty"`
+	PromotionRules       []PromotionRuleView `json:"promotion_rules,omitempty"`
+	PublicSKUs           *[]PublicSKUView    `json:"skus,omitempty"`
+	ManualStockAvailable int                 `json:"manual_stock_available"`
+	AutoStockAvailable   int64               `json:"auto_stock_available"`
+	StockStatus          string              `json:"stock_status"`
+	IsSoldOut            bool                `json:"is_sold_out"`
 }
 
 // GetConfig 获取全局配置
@@ -208,6 +218,24 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 	displayPrice := resolvePublicDisplayPrice(product)
 	item.Product.PriceAmount = displayPrice
 	h.decorateProductStock(product, &item)
+
+	// 获取所有活动规则用于前端展示
+	if promotionService != nil {
+		allRules, err := promotionService.GetProductPromotions(product.ID)
+		if err == nil && len(allRules) > 0 {
+			rules := make([]PromotionRuleView, 0, len(allRules))
+			for _, r := range allRules {
+				rules = append(rules, PromotionRuleView{
+					ID:        r.ID,
+					Name:      strings.TrimSpace(r.Name),
+					Type:      strings.TrimSpace(r.Type),
+					Value:     r.Value,
+					MinAmount: r.MinAmount,
+				})
+			}
+			item.PromotionRules = rules
+		}
+	}
 
 	// 构建 PublicSKUs 并为每个 active SKU 计算促销价
 	// 使用 item.Product.SKUs（decorateProductStock 可能已修改库存字段）
