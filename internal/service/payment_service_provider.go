@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -24,6 +23,8 @@ import (
 func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *models.Order, channel *models.PaymentChannel, payment *models.Payment) (err error) {
 	providerType := strings.ToLower(strings.TrimSpace(channel.ProviderType))
 	channelType := strings.ToLower(strings.TrimSpace(channel.ChannelType))
+	gatewayCtx, cancel := detachPaymentGatewayContext(input.Context)
+	defer cancel()
 	log := paymentLogger(
 		"order_id", order.ID,
 		"order_no", order.OrderNo,
@@ -54,13 +55,9 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 		}
 		notifyURL := strings.TrimSpace(cfg.NotifyURL)
 		returnURL := appendURLQuery(cfg.ReturnURL, buildOrderReturnQuery(order, "epay_return", ""))
-		ctx := input.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		subject := buildOrderSubject(order)
 		param := strconv.FormatUint(uint64(payment.ID), 10)
-		result, err := epay.CreatePayment(ctx, cfg, epay.CreateInput{
+		result, err := epay.CreatePayment(gatewayCtx, cfg, epay.CreateInput{
 			OrderNo:     order.OrderNo,
 			PaymentID:   payment.ID,
 			Amount:      payment.Amount.String(),
@@ -117,12 +114,8 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			return fmt.Errorf("%w: notify_url/return_url is required", ErrPaymentChannelConfigInvalid)
 		}
 		returnURL = appendURLQuery(returnURL, buildOrderReturnQuery(order, "epusdt_return", ""))
-		ctx := input.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		subject := buildOrderSubject(order)
-		result, err := epusdt.CreatePayment(ctx, cfg, epusdt.CreateInput{
+		result, err := epusdt.CreatePayment(gatewayCtx, cfg, epusdt.CreateInput{
 			OrderNo:   order.OrderNo,
 			PaymentID: payment.ID,
 			Amount:    payment.Amount.String(),
@@ -169,15 +162,11 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 		if err := tokenpay.ValidateConfig(cfg); err != nil {
 			return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 		}
-		ctx := input.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		redirectURL := strings.TrimSpace(cfg.RedirectURL)
 		if redirectURL != "" {
 			redirectURL = appendURLQuery(redirectURL, buildOrderReturnQuery(order, "tokenpay_return", ""))
 		}
-		createResult, err := tokenpay.CreatePayment(ctx, cfg, tokenpay.CreateInput{
+		createResult, err := tokenpay.CreatePayment(gatewayCtx, cfg, tokenpay.CreateInput{
 			OutOrderID:      strings.TrimSpace(order.OrderNo),
 			OrderUserKey:    resolveTokenPayOrderUserKey(order),
 			ActualAmount:    payment.Amount.String(),
@@ -221,11 +210,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			if err := paypal.ValidateConfig(cfg); err != nil {
 				return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 			}
-			ctx := input.Context
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			createResult, err := paypal.CreateOrder(ctx, cfg, paypal.CreateInput{
+			createResult, err := paypal.CreateOrder(gatewayCtx, cfg, paypal.CreateInput{
 				OrderNo:     order.OrderNo,
 				PaymentID:   payment.ID,
 				Amount:      payment.Amount.String(),
@@ -267,11 +252,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			if err := alipay.ValidateConfig(cfg, channel.InteractionMode); err != nil {
 				return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 			}
-			ctx := input.Context
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			createResult, err := alipay.CreatePayment(ctx, cfg, alipay.CreateInput{
+			createResult, err := alipay.CreatePayment(gatewayCtx, cfg, alipay.CreateInput{
 				OrderNo:        order.OrderNo,
 				PaymentID:      payment.ID,
 				Amount:         payment.Amount.String(),
@@ -315,11 +296,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			}
 			cfgForCreate := *cfg
 			cfgForCreate.H5RedirectURL = appendURLQuery(cfg.H5RedirectURL, buildOrderReturnQuery(order, "wechat_return", ""))
-			ctx := input.Context
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			createResult, err := wechatpay.CreatePayment(ctx, &cfgForCreate, wechatpay.CreateInput{
+			createResult, err := wechatpay.CreatePayment(gatewayCtx, &cfgForCreate, wechatpay.CreateInput{
 				OrderNo:     order.OrderNo,
 				PaymentID:   payment.ID,
 				Amount:      payment.Amount.String(),
@@ -360,11 +337,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *m
 			if err := stripe.ValidateConfig(cfg); err != nil {
 				return fmt.Errorf("%w: %v", ErrPaymentChannelConfigInvalid, err)
 			}
-			ctx := input.Context
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			createResult, err := stripe.CreatePayment(ctx, cfg, stripe.CreateInput{
+			createResult, err := stripe.CreatePayment(gatewayCtx, cfg, stripe.CreateInput{
 				OrderNo:     order.OrderNo,
 				PaymentID:   payment.ID,
 				Amount:      payment.Amount.String(),
