@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// RedeemGiftCardRequest Channel 礼品卡兑换请求
+type RedeemGiftCardRequest struct {
+	ChannelUserID  string `json:"channel_user_id"`
+	TelegramUserID string `json:"telegram_user_id"`
+	Code           string `json:"code" binding:"required"`
+}
 
 // GetWallet GET /api/v1/channel/wallet?telegram_user_id=xxx
 func (h *Handler) GetWallet(c *gin.Context) {
@@ -106,6 +114,58 @@ func (h *Handler) GetWalletTransactions(c *gin.Context) {
 		"page_size":   pageSize,
 		"total":       total,
 		"total_pages": totalPages,
+	})
+}
+
+// RedeemGiftCard POST /api/v1/channel/wallet/gift-card/redeem
+func (h *Handler) RedeemGiftCard(c *gin.Context) {
+	var req RedeemGiftCardRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondChannelBindError(c, err)
+		return
+	}
+
+	channelUserID := channelUserIDValue(req.ChannelUserID, req.TelegramUserID)
+	if channelUserID == "" {
+		respondChannelError(c, 400, 400, "validation_error", "error.bad_request", nil)
+		return
+	}
+
+	userID, err := h.provisionTelegramChannelUserID(service.TelegramChannelIdentityInput{ChannelUserID: channelUserID})
+	if err != nil {
+		logger.Errorw("channel_wallet_gift_card_resolve_user", "channel_user_id", channelUserID, "error", err)
+		respondChannelIdentityServiceError(c, err)
+		return
+	}
+
+	card, account, txn, err := h.GiftCardService.RedeemGiftCard(service.GiftCardRedeemInput{
+		UserID: userID,
+		Code:   strings.TrimSpace(req.Code),
+	})
+	if err != nil {
+		logger.Warnw("channel_wallet_gift_card_redeem_failed", "user_id", userID, "channel_user_id", channelUserID, "error", err)
+		switch {
+		case errors.Is(err, service.ErrGiftCardInvalid):
+			respondChannelError(c, 400, 400, "gift_card_invalid", "error.gift_card_invalid", nil)
+		case errors.Is(err, service.ErrGiftCardNotFound):
+			respondChannelError(c, 404, 404, "gift_card_not_found", "error.gift_card_not_found", nil)
+		case errors.Is(err, service.ErrGiftCardExpired):
+			respondChannelError(c, 400, 400, "gift_card_expired", "error.gift_card_expired", nil)
+		case errors.Is(err, service.ErrGiftCardDisabled):
+			respondChannelError(c, 400, 400, "gift_card_disabled", "error.gift_card_disabled", nil)
+		case errors.Is(err, service.ErrGiftCardRedeemed):
+			respondChannelError(c, 400, 400, "gift_card_redeemed", "error.gift_card_redeemed", nil)
+		default:
+			respondChannelError(c, 500, 500, "gift_card_redeem_failed", "error.gift_card_redeem_failed", err)
+		}
+		return
+	}
+
+	respondChannelSuccess(c, gin.H{
+		"gift_card":    card,
+		"wallet":       account,
+		"transaction":  txn,
+		"wallet_delta": card.Amount,
 	})
 }
 

@@ -202,6 +202,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 			// Wallet 端点（钱包）
 			channelAPI.GET("/wallet", channelHandler.GetWallet)
 			channelAPI.GET("/wallet/transactions", channelHandler.GetWalletTransactions)
+			channelAPI.POST("/wallet/gift-card/redeem", channelHandler.RedeemGiftCard)
 			channelAPI.POST("/wallet/recharge", channelHandler.CreateWalletRecharge)
 		}
 
