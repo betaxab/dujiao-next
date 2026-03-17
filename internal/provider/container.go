@@ -97,7 +97,6 @@ type Container struct {
 	ChannelClientService      *service.ChannelClientService
 	TelegramBroadcastService  *service.TelegramBroadcastService
 	MemberLevelService        *service.MemberLevelService
-	AdProxyService            *service.AdProxyService
 	MediaService              *service.MediaService
 	OrderRiskControlService   *service.OrderRiskControlService
 }
@@ -310,5 +309,4 @@ func (c *Container) initServices() {
 	c.ProcurementOrderService.SetNotificationService(c.NotificationService)
 	c.MediaService = service.NewMediaService(c.MediaRepo)
 	c.ProductMappingService.SetMediaService(c.MediaService)
-	c.AdProxyService = service.NewAdProxyService()
 }
