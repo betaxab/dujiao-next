@@ -8,8 +8,6 @@ import (
 	"github.com/dujiao-next/internal/platform/database/gormdb"
 	"github.com/dujiao-next/internal/queue"
 
-	adproxyapp "github.com/dujiao-next/internal/modules/adproxy/application"
-	adproxygateway "github.com/dujiao-next/internal/modules/adproxy/infrastructure/adgateway"
 	cardsecretapp "github.com/dujiao-next/internal/modules/cardsecret/application"
 	cartapp "github.com/dujiao-next/internal/modules/cart/application"
 	categoryapp "github.com/dujiao-next/internal/modules/catalog/category/application"
@@ -47,7 +45,6 @@ func (q walletRefundEmailQueue) EnqueueRechargeRefundEmail(rechargeID, refundID 
 
 // initApplicationServices 装配内容、购物车、订单、履约和营销用例。
 func (c *Container) initApplicationServices() {
-	c.AdProxyService = adproxyapp.NewService(adproxygateway.New())
 	postStore := gormstore.NewPostStore(gormdb.DB)
 	postCategoryStore := gormstore.NewPostCategoryStore(gormdb.DB)
 	c.ContentPostService = contentapp.NewPostService(
