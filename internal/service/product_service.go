@@ -303,6 +303,10 @@ func (s *ProductService) Update(id string, input CreateProductInput) (*models.Pr
 	if fulfillmentType == "" {
 		return nil, ErrFulfillmentInvalid
 	}
+	// 对接商品的真实交付类型必须保持 upstream，后台返回的 auto/manual 仅用于展示。
+	if product.IsMapped {
+		fulfillmentType = constants.FulfillmentTypeUpstream
+	}
 	product.FulfillmentType = fulfillmentType
 	if fulfillmentType == constants.FulfillmentTypeManual {
 		_, normalizedSchemaJSON, err := parseManualFormSchema(models.JSON(input.ManualFormSchemaJSON))

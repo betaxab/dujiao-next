@@ -532,6 +532,75 @@ func TestProductServiceGetAdminByIDIncludesInactiveSKUs(t *testing.T) {
 	}
 }
 
+func TestProductServiceUpdateKeepsMappedProductFulfillmentUpstream(t *testing.T) {
+	svc, db := newProductServiceForTest(t)
+
+	category := models.Category{
+		Slug:     "mapped-category",
+		NameJSON: models.JSON{"zh-CN": "mapped-category"},
+	}
+	if err := db.Create(&category).Error; err != nil {
+		t.Fatalf("create category failed: %v", err)
+	}
+
+	product := models.Product{
+		CategoryID:       category.ID,
+		Slug:             "mapped-product",
+		TitleJSON:        models.JSON{"zh-CN": "mapped-product"},
+		PriceAmount:      models.NewMoneyFromDecimal(decimal.NewFromInt(10)),
+		PurchaseType:     constants.ProductPurchaseMember,
+		FulfillmentType:  constants.FulfillmentTypeUpstream,
+		ManualStockTotal: 0,
+		IsMapped:         true,
+		IsActive:         true,
+	}
+	if err := db.Create(&product).Error; err != nil {
+		t.Fatalf("create mapped product failed: %v", err)
+	}
+
+	sku := models.ProductSKU{
+		ProductID:      product.ID,
+		SKUCode:        models.DefaultSKUCode,
+		SpecValuesJSON: models.JSON{},
+		PriceAmount:    models.NewMoneyFromDecimal(decimal.NewFromInt(10)),
+		IsActive:       true,
+	}
+	if err := db.Create(&sku).Error; err != nil {
+		t.Fatalf("create mapped product sku failed: %v", err)
+	}
+
+	updated, err := svc.Update(strconv.FormatUint(uint64(product.ID), 10), CreateProductInput{
+		CategoryID:      category.ID,
+		Slug:            "mapped-product-updated",
+		TitleJSON:       map[string]interface{}{"zh-CN": "mapped-product-updated"},
+		PriceAmount:     decimal.NewFromInt(20),
+		PurchaseType:    constants.ProductPurchaseMember,
+		FulfillmentType: constants.FulfillmentTypeAuto,
+		ManualStockTotal: func() *int {
+			value := 0
+			return &value
+		}(),
+		IsActive: func() *bool {
+			value := true
+			return &value
+		}(),
+	})
+	if err != nil {
+		t.Fatalf("update mapped product failed: %v", err)
+	}
+	if updated.FulfillmentType != constants.FulfillmentTypeUpstream {
+		t.Fatalf("expected mapped product fulfillment type to remain upstream, got %s", updated.FulfillmentType)
+	}
+
+	reloaded, err := svc.GetAdminByID(strconv.FormatUint(uint64(product.ID), 10))
+	if err != nil {
+		t.Fatalf("reload mapped product failed: %v", err)
+	}
+	if reloaded.FulfillmentType != constants.FulfillmentTypeUpstream {
+		t.Fatalf("expected persisted fulfillment type upstream, got %s", reloaded.FulfillmentType)
+	}
+}
+
 func newProductServiceForTest(t *testing.T) (*ProductService, *gorm.DB) {
 	t.Helper()
 
