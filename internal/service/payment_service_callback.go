@@ -494,7 +494,7 @@ func (s *PaymentService) enqueueOrderPaidAsync(order *models.Order, payment *mod
 		}
 	}
 	if s.queueClient != nil {
-		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusPaid); err != nil {
+		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusPaid); err != nil {
 			log.Warnw("payment_enqueue_status_email_failed",
 				"order_id", order.ID,
 				"order_no", order.OrderNo,

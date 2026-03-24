@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/models"
@@ -27,6 +28,7 @@ type OrderService struct {
 	promotionRepo      repository.PromotionRepository
 	queueClient        *queue.Client
 	settingService     *SettingService
+	defaultEmailConfig config.EmailConfig
 	walletService      *WalletService
 	affiliateSvc       *AffiliateService
 	memberLevelService *MemberLevelService
@@ -45,6 +47,7 @@ type OrderServiceOptions struct {
 	PromotionRepo      repository.PromotionRepository
 	QueueClient        *queue.Client
 	SettingService     *SettingService
+	DefaultEmailConfig config.EmailConfig
 	WalletService      *WalletService
 	AffiliateService   *AffiliateService
 	MemberLevelService *MemberLevelService
@@ -64,6 +67,7 @@ func NewOrderService(opts OrderServiceOptions) *OrderService {
 		promotionRepo:      opts.PromotionRepo,
 		queueClient:        opts.QueueClient,
 		settingService:     opts.SettingService,
+		defaultEmailConfig: opts.DefaultEmailConfig,
 		walletService:      opts.WalletService,
 		affiliateSvc:       opts.AffiliateService,
 		memberLevelService: opts.MemberLevelService,

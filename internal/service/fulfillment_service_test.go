@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/repository"
@@ -103,7 +104,7 @@ func TestCreateAutoFulfillmentRespectsSKUBoundary(t *testing.T) {
 		repository.NewOrderRepository(db),
 		repository.NewFulfillmentRepository(db),
 		repository.NewCardSecretRepository(db),
-		nil, nil,
+		nil, nil, config.EmailConfig{}, nil,
 	)
 
 	result, err := svc.CreateAuto(order.ID)

@@ -4,6 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/dujiao-next/internal/config"
+	"github.com/dujiao-next/internal/constants"
+	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/queue"
 	"github.com/dujiao-next/internal/repository"
 )
@@ -30,6 +33,8 @@ func TestEnqueueOrderStatusEmailTaskIfEligibleSkipTelegramPlaceholder(t *testing
 	skipped, err := enqueueOrderStatusEmailTaskIfEligible(
 		orderStatusEmailOrderRepoStub{receiver: "telegram_123@login.local"},
 		queueClient,
+		nil,
+		config.EmailConfig{},
 		101,
 		"paid",
 	)
@@ -53,6 +58,8 @@ func TestEnqueueOrderStatusEmailTaskIfEligibleSkipEmptyReceiver(t *testing.T) {
 	skipped, err := enqueueOrderStatusEmailTaskIfEligible(
 		orderStatusEmailOrderRepoStub{receiver: "   "},
 		queueClient,
+		nil,
+		config.EmailConfig{},
 		102,
 		"paid",
 	)
@@ -76,6 +83,8 @@ func TestEnqueueOrderStatusEmailTaskIfEligibleEnqueueNormalReceiver(t *testing.T
 	skipped, err := enqueueOrderStatusEmailTaskIfEligible(
 		orderStatusEmailOrderRepoStub{receiver: "buyer@example.com"},
 		queueClient,
+		nil,
+		config.EmailConfig{},
 		103,
 		"paid",
 	)
@@ -99,6 +108,8 @@ func TestEnqueueOrderStatusEmailTaskIfEligibleFallbackWhenLookupFailed(t *testin
 	skipped, err := enqueueOrderStatusEmailTaskIfEligible(
 		orderStatusEmailOrderRepoStub{err: errors.New("lookup failed")},
 		queueClient,
+		nil,
+		config.EmailConfig{},
 		104,
 		"paid",
 	)
@@ -107,5 +118,35 @@ func TestEnqueueOrderStatusEmailTaskIfEligibleFallbackWhenLookupFailed(t *testin
 	}
 	if skipped {
 		t.Fatalf("expected fallback enqueue when receiver lookup failed")
+	}
+}
+
+func TestEnqueueOrderStatusEmailTaskIfEligibleSkipWhenSMTPDisabled(t *testing.T) {
+	queueClient, err := queue.NewClient(nil)
+	if err != nil {
+		t.Fatalf("new queue client failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = queueClient.Close()
+	})
+
+	repo := newMockSettingRepo()
+	repo.store[constants.SettingKeySMTPConfig] = models.JSON{
+		"enabled": false,
+	}
+
+	skipped, err := enqueueOrderStatusEmailTaskIfEligible(
+		orderStatusEmailOrderRepoStub{receiver: "buyer@example.com"},
+		queueClient,
+		NewSettingService(repo),
+		config.EmailConfig{Enabled: true},
+		105,
+		"paid",
+	)
+	if err != nil {
+		t.Fatalf("enqueue helper returned error: %v", err)
+	}
+	if !skipped {
+		t.Fatalf("expected task skipped when smtp disabled")
 	}
 }

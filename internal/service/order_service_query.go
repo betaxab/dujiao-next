@@ -28,7 +28,7 @@ func (s *OrderService) ensureOrderCanceledIfExpired(order *models.Order) error {
 		return err
 	}
 	if s.queueClient != nil {
-		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {
+		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusCanceled); err != nil {
 			logger.Warnw("order_enqueue_status_email_failed",
 				"order_id", order.ID,
 				"target_order_id", order.ID,

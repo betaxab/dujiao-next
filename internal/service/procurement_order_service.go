@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/models"
@@ -33,6 +34,8 @@ type ProcurementOrderService struct {
 	skuMapRepo            repository.SKUMappingRepository
 	connSvc               *SiteConnectionService
 	queueClient           *queue.Client
+	settingService        *SettingService
+	defaultEmailConfig    config.EmailConfig
 	fulfillSvc            *FulfillmentService
 	downstreamCallbackSvc *DownstreamCallbackService
 }
@@ -50,16 +53,20 @@ func NewProcurementOrderService(
 	skuMapRepo repository.SKUMappingRepository,
 	connSvc *SiteConnectionService,
 	queueClient *queue.Client,
+	settingService *SettingService,
+	defaultEmailConfig config.EmailConfig,
 	fulfillSvc *FulfillmentService,
 ) *ProcurementOrderService {
 	return &ProcurementOrderService{
-		procRepo:    procRepo,
-		orderRepo:   orderRepo,
-		mappingRepo: mappingRepo,
-		skuMapRepo:  skuMapRepo,
-		connSvc:     connSvc,
-		queueClient: queueClient,
-		fulfillSvc:  fulfillSvc,
+		procRepo:           procRepo,
+		orderRepo:          orderRepo,
+		mappingRepo:        mappingRepo,
+		skuMapRepo:         skuMapRepo,
+		connSvc:            connSvc,
+		queueClient:        queueClient,
+		settingService:     settingService,
+		defaultEmailConfig: defaultEmailConfig,
+		fulfillSvc:         fulfillSvc,
 	}
 }
 
@@ -421,10 +428,10 @@ func (s *ProcurementOrderService) HandleUpstreamCallback(procurementOrderID uint
 				if status == "" {
 					status = constants.OrderStatusDelivered
 				}
-				_, _ = enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, *localOrder.ParentID, status)
+				_, _ = enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, *localOrder.ParentID, status)
 			}
 		} else if localOrder != nil && s.queueClient != nil {
-			_, _ = enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, localOrder.ID, constants.OrderStatusDelivered)
+			_, _ = enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, localOrder.ID, constants.OrderStatusDelivered)
 		}
 
 		// 触发下游回调（多级连跳：本站作为中间节点，通知下游交付完成）

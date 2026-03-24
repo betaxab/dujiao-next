@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/models"
@@ -22,6 +23,8 @@ type FulfillmentService struct {
 	fulfillmentRepo       repository.FulfillmentRepository
 	secretRepo            repository.CardSecretRepository
 	queueClient           *queue.Client
+	settingService        *SettingService
+	defaultEmailConfig    config.EmailConfig
 	downstreamCallbackSvc *DownstreamCallbackService
 	userOAuthIdentityRepo repository.UserOAuthIdentityRepository
 }
@@ -37,6 +40,8 @@ func NewFulfillmentService(
 	fulfillmentRepo repository.FulfillmentRepository,
 	secretRepo repository.CardSecretRepository,
 	queueClient *queue.Client,
+	settingService *SettingService,
+	defaultEmailConfig config.EmailConfig,
 	userOAuthIdentityRepo repository.UserOAuthIdentityRepository,
 ) *FulfillmentService {
 	return &FulfillmentService{
@@ -44,6 +49,8 @@ func NewFulfillmentService(
 		fulfillmentRepo:       fulfillmentRepo,
 		secretRepo:            secretRepo,
 		queueClient:           queueClient,
+		settingService:        settingService,
+		defaultEmailConfig:    defaultEmailConfig,
 		userOAuthIdentityRepo: userOAuthIdentityRepo,
 	}
 }
@@ -148,7 +155,7 @@ func (s *FulfillmentService) CreateManual(input CreateManualInput) (*models.Fulf
 				if status == "" {
 					status = constants.OrderStatusDelivered
 				}
-				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, *order.ParentID, status); err != nil {
+				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, *order.ParentID, status); err != nil {
 					logger.Warnw("fulfillment_enqueue_status_email_failed",
 						"order_id", order.ID,
 						"target_order_id", *order.ParentID,
@@ -158,7 +165,7 @@ func (s *FulfillmentService) CreateManual(input CreateManualInput) (*models.Fulf
 				}
 			}
 		} else {
-			if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, input.OrderID, constants.OrderStatusDelivered); err != nil {
+			if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, input.OrderID, constants.OrderStatusDelivered); err != nil {
 				logger.Warnw("fulfillment_enqueue_status_email_failed",
 					"order_id", order.ID,
 					"target_order_id", input.OrderID,
@@ -332,7 +339,7 @@ func (s *FulfillmentService) CreateAuto(orderID uint) (*models.Fulfillment, erro
 				if status == "" {
 					status = constants.OrderStatusCompleted
 				}
-				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, *order.ParentID, status); err != nil {
+				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, *order.ParentID, status); err != nil {
 					logger.Warnw("fulfillment_enqueue_status_email_failed",
 						"order_id", order.ID,
 						"target_order_id", *order.ParentID,
@@ -342,7 +349,7 @@ func (s *FulfillmentService) CreateAuto(orderID uint) (*models.Fulfillment, erro
 				}
 			}
 		} else {
-			if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, orderID, constants.OrderStatusCompleted); err != nil {
+			if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, orderID, constants.OrderStatusCompleted); err != nil {
 				logger.Warnw("fulfillment_enqueue_status_email_failed",
 					"order_id", order.ID,
 					"target_order_id", orderID,

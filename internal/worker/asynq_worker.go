@@ -122,14 +122,41 @@ func (c *Consumer) handleOrderStatusEmail(_ context.Context, task *asynq.Task) e
 		IsGuest:         order.UserID == 0,
 	}
 	if err := c.EmailService.SendOrderStatusEmail(receiverEmail, input, locale); err != nil {
-		logger.Warnw("worker_order_status_email_send_failed",
-			"order_id", order.ID,
-			"order_no", order.OrderNo,
-			"receiver_email", receiverEmail,
-			"status", status,
-			"error", err,
-		)
-		return err
+		switch {
+		case errors.Is(err, service.ErrEmailServiceDisabled):
+			logger.Debugw("worker_order_status_email_skip_email_disabled",
+				"order_id", order.ID,
+				"order_no", order.OrderNo,
+				"receiver_email", receiverEmail,
+				"status", status,
+			)
+			return nil
+		case errors.Is(err, service.ErrEmailServiceNotConfigured):
+			logger.Debugw("worker_order_status_email_skip_email_not_configured",
+				"order_id", order.ID,
+				"order_no", order.OrderNo,
+				"receiver_email", receiverEmail,
+				"status", status,
+			)
+			return nil
+		case errors.Is(err, service.ErrInvalidEmail):
+			logger.Debugw("worker_order_status_email_skip_invalid_email",
+				"order_id", order.ID,
+				"order_no", order.OrderNo,
+				"receiver_email", receiverEmail,
+				"status", status,
+			)
+			return nil
+		default:
+			logger.Warnw("worker_order_status_email_send_failed",
+				"order_id", order.ID,
+				"order_no", order.OrderNo,
+				"receiver_email", receiverEmail,
+				"status", status,
+				"error", err,
+			)
+			return err
+		}
 	}
 	return nil
 }

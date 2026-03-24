@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/models"
@@ -31,6 +32,7 @@ type PaymentService struct {
 	queueClient           *queue.Client
 	walletSvc             *WalletService
 	settingService        *SettingService
+	defaultEmailConfig    config.EmailConfig
 	expireMinutes         int
 	affiliateSvc          *AffiliateService
 	notificationSvc       *NotificationService
@@ -67,6 +69,7 @@ type PaymentServiceOptions struct {
 	QueueClient           *queue.Client
 	WalletService         *WalletService
 	SettingService        *SettingService
+	DefaultEmailConfig    config.EmailConfig
 	ExpireMinutes         int
 	AffiliateService      *AffiliateService
 	NotificationService   *NotificationService
@@ -86,6 +89,7 @@ func NewPaymentService(opts PaymentServiceOptions) *PaymentService {
 		queueClient:           opts.QueueClient,
 		walletSvc:             opts.WalletService,
 		settingService:        opts.SettingService,
+		defaultEmailConfig:    opts.DefaultEmailConfig,
 		expireMinutes:         opts.ExpireMinutes,
 		affiliateSvc:          opts.AffiliateService,
 		notificationSvc:       opts.NotificationService,

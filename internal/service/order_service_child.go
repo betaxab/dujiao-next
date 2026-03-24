@@ -134,7 +134,7 @@ func (s *OrderService) CancelOrder(orderID uint, userID uint) (*models.Order, er
 		}
 	}
 	if s.queueClient != nil {
-		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {
+		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusCanceled); err != nil {
 			logger.Warnw("order_enqueue_status_email_failed",
 				"order_id", order.ID,
 				"target_order_id", order.ID,
@@ -180,7 +180,7 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 				}
 			}
 			if s.queueClient != nil {
-				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {
+				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusCanceled); err != nil {
 					logger.Warnw("order_enqueue_status_email_failed",
 						"order_id", order.ID,
 						"target_order_id", order.ID,
@@ -218,7 +218,7 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 				order.Children[i].UpdatedAt = now
 			}
 			if s.queueClient != nil {
-				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusPaid); err != nil {
+				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusPaid); err != nil {
 					logger.Warnw("order_enqueue_status_email_failed",
 						"order_id", order.ID,
 						"target_order_id", order.ID,
@@ -259,7 +259,7 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 				}
 			}
 			if s.queueClient != nil {
-				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCompleted); err != nil {
+				if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusCompleted); err != nil {
 					logger.Warnw("order_enqueue_status_email_failed",
 						"order_id", order.ID,
 						"target_order_id", order.ID,
@@ -344,7 +344,7 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 			if status == "" {
 				status = target
 			}
-			if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, *order.ParentID, status); err != nil {
+			if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, *order.ParentID, status); err != nil {
 				logger.Warnw("order_enqueue_status_email_failed",
 					"order_id", order.ID,
 					"target_order_id", *order.ParentID,
@@ -354,7 +354,7 @@ func (s *OrderService) UpdateOrderStatus(orderID uint, targetStatus string) (*mo
 			}
 		}
 	} else if s.queueClient != nil {
-		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, target); err != nil {
+		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, target); err != nil {
 			logger.Warnw("order_enqueue_status_email_failed",
 				"order_id", order.ID,
 				"target_order_id", order.ID,
@@ -474,7 +474,7 @@ func (s *OrderService) CancelExpiredOrder(orderID uint) (*models.Order, error) {
 		}
 	}
 	if s.queueClient != nil {
-		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, order.ID, constants.OrderStatusCanceled); err != nil {
+		if _, err := enqueueOrderStatusEmailTaskIfEligible(s.orderRepo, s.queueClient, s.settingService, s.defaultEmailConfig, order.ID, constants.OrderStatusCanceled); err != nil {
 			logger.Warnw("order_enqueue_status_email_failed",
 				"order_id", order.ID,
 				"target_order_id", order.ID,

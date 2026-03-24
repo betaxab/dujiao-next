@@ -1,9 +1,16 @@
 package worker
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/dujiao-next/internal/config"
 	"github.com/dujiao-next/internal/models"
+	"github.com/dujiao-next/internal/provider"
+	"github.com/dujiao-next/internal/queue"
+	"github.com/dujiao-next/internal/repository"
+	"github.com/dujiao-next/internal/service"
 )
 
 func TestBuildBotNotifyRequestURLReplacesPath(t *testing.T) {
@@ -49,6 +56,116 @@ func TestBuildOrderFulfillmentEmailPayloadPreferOrderFulfillment(t *testing.T) {
 	want := "MAIN-LINE-1\nMAIN-LINE-2"
 	if got != want {
 		t.Fatalf("unexpected payload, want %q, got %q", want, got)
+	}
+}
+
+type orderStatusEmailWorkerOrderRepoStub struct {
+	repository.OrderRepository
+	order *models.Order
+	err   error
+}
+
+func (s orderStatusEmailWorkerOrderRepoStub) GetByID(_ uint) (*models.Order, error) {
+	return s.order, s.err
+}
+
+func TestHandleOrderStatusEmailSkipsNonRetryableEmailErrors(t *testing.T) {
+	testCases := []struct {
+		name         string
+		order        *models.Order
+		emailConfig  config.EmailConfig
+		expectNilErr bool
+	}{
+		{
+			name: "smtp_disabled",
+			order: &models.Order{
+				ID:          1,
+				OrderNo:     "DJ-ORDER-001",
+				GuestEmail:  "buyer@example.com",
+				GuestLocale: "zh-CN",
+				Currency:    "CNY",
+			},
+			emailConfig:  config.EmailConfig{Enabled: false},
+			expectNilErr: true,
+		},
+		{
+			name: "smtp_not_configured",
+			order: &models.Order{
+				ID:          2,
+				OrderNo:     "DJ-ORDER-002",
+				GuestEmail:  "buyer@example.com",
+				GuestLocale: "zh-CN",
+				Currency:    "CNY",
+			},
+			emailConfig:  config.EmailConfig{Enabled: true},
+			expectNilErr: true,
+		},
+		{
+			name: "invalid_receiver_email",
+			order: &models.Order{
+				ID:          3,
+				OrderNo:     "DJ-ORDER-003",
+				GuestEmail:  "invalid-email",
+				GuestLocale: "zh-CN",
+				Currency:    "CNY",
+			},
+			emailConfig: config.EmailConfig{
+				Enabled: true,
+				Host:    "127.0.0.1",
+				Port:    1,
+				From:    "sender@example.com",
+			},
+			expectNilErr: true,
+		},
+		{
+			name: "generic_send_failure_keeps_retryable_error",
+			order: &models.Order{
+				ID:          4,
+				OrderNo:     "DJ-ORDER-004",
+				GuestEmail:  "buyer@example.com",
+				GuestLocale: "zh-CN",
+				Currency:    "CNY",
+			},
+			emailConfig: config.EmailConfig{
+				Enabled: true,
+				Host:    "127.0.0.1",
+				Port:    1,
+				From:    "sender@example.com",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			task, err := queue.NewOrderStatusEmailTask(queue.OrderStatusEmailPayload{
+				OrderID: tc.order.ID,
+				Status:  "paid",
+			})
+			if err != nil {
+				t.Fatalf("new order status email task failed: %v", err)
+			}
+
+			consumer := &Consumer{
+				Container: &provider.Container{
+					OrderRepo:    orderStatusEmailWorkerOrderRepoStub{order: tc.order},
+					EmailService: service.NewEmailService(&tc.emailConfig),
+				},
+			}
+
+			err = consumer.handleOrderStatusEmail(context.Background(), task)
+			if tc.expectNilErr {
+				if err != nil {
+					t.Fatalf("expected nil error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected retryable send error, got nil")
+			}
+			if errors.Is(err, service.ErrEmailServiceDisabled) || errors.Is(err, service.ErrEmailServiceNotConfigured) || errors.Is(err, service.ErrInvalidEmail) {
+				t.Fatalf("expected generic retryable error, got %v", err)
+			}
+		})
 	}
 }
 

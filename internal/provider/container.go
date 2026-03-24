@@ -230,6 +230,7 @@ func (c *Container) initServices() {
 		PromotionRepo:      c.PromotionRepo,
 		QueueClient:        c.QueueClient,
 		SettingService:     c.SettingService,
+		DefaultEmailConfig: c.Config.Email,
 		WalletService:      c.WalletService,
 		AffiliateService:   c.AffiliateService,
 		MemberLevelService: c.MemberLevelService,
@@ -237,6 +238,7 @@ func (c *Container) initServices() {
 	})
 	c.FulfillmentService = service.NewFulfillmentService(
 		c.OrderRepo, c.FulfillmentRepo, c.CardSecretRepo, c.QueueClient,
+		c.SettingService, c.Config.Email,
 		c.UserOAuthIdentityRepo,
 	)
 	c.CardSecretService = service.NewCardSecretService(c.CardSecretRepo, c.CardSecretBatchRepo, c.ProductRepo, c.ProductSKURepo)
@@ -265,13 +267,14 @@ func (c *Container) initServices() {
 		QueueClient:           c.QueueClient,
 		WalletService:         c.WalletService,
 		SettingService:        c.SettingService,
+		DefaultEmailConfig:    c.Config.Email,
 		ExpireMinutes:         c.Config.Order.PaymentExpireMinutes,
 		AffiliateService:      c.AffiliateService,
 		NotificationService:   c.NotificationService,
 	})
 	c.ProcurementOrderService = service.NewProcurementOrderService(
 		c.ProcurementOrderRepo, c.OrderRepo, c.ProductMappingRepo, c.SKUMappingRepo,
-		c.SiteConnectionService, c.QueueClient, c.FulfillmentService,
+		c.SiteConnectionService, c.QueueClient, c.SettingService, c.Config.Email, c.FulfillmentService,
 	)
 	c.ReconciliationService = service.NewReconciliationService(
 		c.ReconciliationJobRepo, c.ReconciliationItemRepo, c.ProcurementOrderRepo,
