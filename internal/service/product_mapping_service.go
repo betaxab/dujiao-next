@@ -105,14 +105,19 @@ func (s *ProductMappingService) ImportUpstreamProduct(connectionID uint, upstrea
 	// 确定交付类型：上游商品映射后统一使用 upstream 类型
 	fulfillmentType := constants.FulfillmentTypeUpstream
 
-	// 解析价格
+	// 解析价格（应用连接加价比例）
+	markupPercent := conn.PriceMarkupPercent
+	roundingMode := conn.PriceRoundingMode
+
 	priceAmount, _ := decimal.NewFromString(upProduct.PriceAmount)
+	priceAmount = CalculateMarkedUpPrice(priceAmount, markupPercent, roundingMode)
 	if priceAmount.LessThanOrEqual(decimal.Zero) && len(upProduct.SKUs) > 0 {
-		// 取 SKU 最低价
+		// 取加价后 SKU 最低价
 		for _, sku := range upProduct.SKUs {
 			skuPrice, _ := decimal.NewFromString(sku.PriceAmount)
-			if skuPrice.GreaterThan(decimal.Zero) && (priceAmount.IsZero() || skuPrice.LessThan(priceAmount)) {
-				priceAmount = skuPrice
+			localPrice := CalculateMarkedUpPrice(skuPrice, markupPercent, roundingMode)
+			if localPrice.GreaterThan(decimal.Zero) && (priceAmount.IsZero() || localPrice.LessThan(priceAmount)) {
+				priceAmount = localPrice
 			}
 		}
 	}
@@ -158,11 +163,12 @@ func (s *ProductMappingService) ImportUpstreamProduct(connectionID uint, upstrea
 		localSKUs := make([]models.ProductSKU, 0, len(upProduct.SKUs))
 		for _, upSKU := range upProduct.SKUs {
 			skuPrice, _ := decimal.NewFromString(upSKU.PriceAmount)
+			localPrice := CalculateMarkedUpPrice(skuPrice, markupPercent, roundingMode)
 			localSKU := models.ProductSKU{
 				ProductID:      product.ID,
 				SKUCode:        upSKU.SKUCode,
 				SpecValuesJSON: upSKU.SpecValues,
-				PriceAmount:    models.NewMoneyFromDecimal(skuPrice.Round(2)),
+				PriceAmount:    models.NewMoneyFromDecimal(localPrice.Round(2)),
 				IsActive:       upSKU.IsActive,
 				SortOrder:      0,
 			}
@@ -456,6 +462,11 @@ func (s *ProductMappingService) SyncProduct(mappingID uint) error {
 		if localSKU != nil {
 			localSKU.SpecValuesJSON = upSKU.SpecValues
 			localSKU.IsActive = upSKU.IsActive
+			// 如果启用了自动同步价格，按加价比例更新本地售价
+			if conn.AutoSyncPrice {
+				newLocalPrice := CalculateMarkedUpPrice(upPrice, conn.PriceMarkupPercent, conn.PriceRoundingMode)
+				localSKU.PriceAmount = models.NewMoneyFromDecimal(newLocalPrice.Round(2))
+			}
 			_ = s.productSKURepo.Update(localSKU)
 		}
 	}
@@ -467,11 +478,12 @@ func (s *ProductMappingService) SyncProduct(mappingID uint) error {
 		}
 
 		skuPrice, _ := decimal.NewFromString(upSKU.PriceAmount)
+		localPrice := CalculateMarkedUpPrice(skuPrice, conn.PriceMarkupPercent, conn.PriceRoundingMode)
 		newLocalSKU := models.ProductSKU{
 			ProductID:      mapping.LocalProductID,
 			SKUCode:        upSKU.SKUCode,
 			SpecValuesJSON: upSKU.SpecValues,
-			PriceAmount:    models.NewMoneyFromDecimal(skuPrice.Round(2)),
+			PriceAmount:    models.NewMoneyFromDecimal(localPrice.Round(2)),
 			IsActive:       upSKU.IsActive,
 			SortOrder:      0,
 		}
@@ -489,6 +501,11 @@ func (s *ProductMappingService) SyncProduct(mappingID uint) error {
 			StockSyncedAt:    &now,
 		}
 		_ = s.skuMappingRepo.Create(newMapping)
+	}
+
+	// ── 2c. 如果启用了自动同步价格，更新 Product.PriceAmount 为最低 SKU 价格 ──
+	if conn.AutoSyncPrice && localProduct != nil {
+		s.recalcProductPrice(localProduct)
 	}
 
 	// ── 3. 更新同步时间 + 上游交付类型 ──
@@ -570,6 +587,65 @@ func (s *ProductMappingService) Delete(id uint) error {
 // GetSKUMappings 获取映射的 SKU 映射列表
 func (s *ProductMappingService) GetSKUMappings(mappingID uint) ([]models.SKUMapping, error) {
 	return s.skuMappingRepo.ListByProductMapping(mappingID)
+}
+
+// ReapplyMarkup 对指定连接的所有映射商品重新应用加价规则
+func (s *ProductMappingService) ReapplyMarkup(connectionID uint) (int, error) {
+	conn, err := s.connService.GetByID(connectionID)
+	if err != nil {
+		return 0, err
+	}
+	if conn == nil {
+		return 0, ErrConnectionNotFound
+	}
+
+	mappings, err := s.mappingRepo.ListActiveByConnection(connectionID)
+	if err != nil {
+		return 0, err
+	}
+
+	updated := 0
+	for _, mapping := range mappings {
+		skuMappings, err := s.skuMappingRepo.ListByProductMapping(mapping.ID)
+		if err != nil {
+			continue
+		}
+
+		for _, sm := range skuMappings {
+			newLocalPrice := CalculateMarkedUpPrice(sm.UpstreamPrice.Decimal, conn.PriceMarkupPercent, conn.PriceRoundingMode)
+			localSKU, err := s.productSKURepo.GetByID(sm.LocalSKUID)
+			if err != nil || localSKU == nil {
+				continue
+			}
+			localSKU.PriceAmount = models.NewMoneyFromDecimal(newLocalPrice.Round(2))
+			_ = s.productSKURepo.Update(localSKU)
+		}
+
+		// 更新 Product.PriceAmount
+		localProduct, err := s.productRepo.GetByID(strconv.FormatUint(uint64(mapping.LocalProductID), 10))
+		if err == nil && localProduct != nil {
+			s.recalcProductPrice(localProduct)
+			updated++
+		}
+	}
+
+	return updated, nil
+}
+
+// recalcProductPrice 重新计算商品基准价格为最低活跃 SKU 价格
+func (s *ProductMappingService) recalcProductPrice(product *models.Product) {
+	allSKUs, err := s.productSKURepo.ListByProduct(product.ID, true)
+	if err != nil || len(allSKUs) == 0 {
+		return
+	}
+	minPrice := allSKUs[0].PriceAmount.Decimal
+	for _, sku := range allSKUs[1:] {
+		if sku.PriceAmount.Decimal.LessThan(minPrice) {
+			minPrice = sku.PriceAmount.Decimal
+		}
+	}
+	product.PriceAmount = models.NewMoneyFromDecimal(minPrice.Round(2))
+	_ = s.productRepo.Update(product)
 }
 
 // ListUpstreamProducts 通过连接代理拉取上游商品列表

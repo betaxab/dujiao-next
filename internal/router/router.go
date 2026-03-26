@@ -403,6 +403,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 				authorized.DELETE("/site-connections/:id", adminHandler.DeleteSiteConnection)
 				authorized.POST("/site-connections/:id/ping", adminHandler.PingSiteConnection)
 				authorized.PUT("/site-connections/:id/status", adminHandler.UpdateSiteConnectionStatus)
+				authorized.POST("/site-connections/:id/reapply-markup", adminHandler.ReapplyConnectionMarkup)
 
 				// 商品映射管理
 				authorized.GET("/product-mappings", adminHandler.GetProductMappings)

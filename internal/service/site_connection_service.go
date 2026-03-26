@@ -11,6 +11,8 @@ import (
 	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/repository"
 	"github.com/dujiao-next/internal/upstream"
+
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -36,14 +38,17 @@ func NewSiteConnectionService(connRepo repository.SiteConnectionRepository, appS
 
 // CreateConnectionInput 创建连接输入
 type CreateConnectionInput struct {
-	Name           string `json:"name"`
-	BaseURL        string `json:"base_url"`
-	ApiKey         string `json:"api_key"`
-	ApiSecret      string `json:"api_secret"`
-	Protocol       string `json:"protocol"`
-	CallbackURL    string `json:"callback_url"`
-	RetryMax       int    `json:"retry_max"`
-	RetryIntervals string `json:"retry_intervals"`
+	Name               string  `json:"name"`
+	BaseURL            string  `json:"base_url"`
+	ApiKey             string  `json:"api_key"`
+	ApiSecret          string  `json:"api_secret"`
+	Protocol           string  `json:"protocol"`
+	CallbackURL        string  `json:"callback_url"`
+	RetryMax           int     `json:"retry_max"`
+	RetryIntervals     string  `json:"retry_intervals"`
+	PriceMarkupPercent float64 `json:"price_markup_percent"`
+	PriceRoundingMode  string  `json:"price_rounding_mode"`
+	AutoSyncPrice      bool    `json:"auto_sync_price"`
 }
 
 // Create 创建连接
@@ -74,16 +79,24 @@ func (s *SiteConnectionService) Create(input CreateConnectionInput) (*models.Sit
 		retryIntervals = "[30,60,300]"
 	}
 
+	roundingMode := strings.TrimSpace(input.PriceRoundingMode)
+	if roundingMode == "" {
+		roundingMode = "none"
+	}
+
 	conn := &models.SiteConnection{
-		Name:           strings.TrimSpace(input.Name),
-		BaseURL:        strings.TrimRight(strings.TrimSpace(input.BaseURL), "/"),
-		ApiKey:         strings.TrimSpace(input.ApiKey),
-		ApiSecret:      encryptedSecret,
-		Protocol:       protocol,
-		CallbackURL:    strings.TrimSpace(input.CallbackURL),
-		Status:         constants.ConnectionStatusPending,
-		RetryMax:       retryMax,
-		RetryIntervals: retryIntervals,
+		Name:               strings.TrimSpace(input.Name),
+		BaseURL:            strings.TrimRight(strings.TrimSpace(input.BaseURL), "/"),
+		ApiKey:             strings.TrimSpace(input.ApiKey),
+		ApiSecret:          encryptedSecret,
+		Protocol:           protocol,
+		CallbackURL:        strings.TrimSpace(input.CallbackURL),
+		Status:             constants.ConnectionStatusPending,
+		RetryMax:           retryMax,
+		RetryIntervals:     retryIntervals,
+		PriceMarkupPercent: decimal.NewFromFloat(input.PriceMarkupPercent),
+		PriceRoundingMode:  roundingMode,
+		AutoSyncPrice:      input.AutoSyncPrice,
 	}
 
 	if err := s.connRepo.Create(conn); err != nil {
@@ -94,14 +107,17 @@ func (s *SiteConnectionService) Create(input CreateConnectionInput) (*models.Sit
 
 // UpdateConnectionInput 更新连接输入
 type UpdateConnectionInput struct {
-	Name           string `json:"name"`
-	BaseURL        string `json:"base_url"`
-	ApiKey         string `json:"api_key"`
-	ApiSecret      string `json:"api_secret"` // 为空则不更新
-	Protocol       string `json:"protocol"`
-	CallbackURL    string `json:"callback_url"`
-	RetryMax       int    `json:"retry_max"`
-	RetryIntervals string `json:"retry_intervals"`
+	Name               string   `json:"name"`
+	BaseURL            string   `json:"base_url"`
+	ApiKey             string   `json:"api_key"`
+	ApiSecret          string   `json:"api_secret"` // 为空则不更新
+	Protocol           string   `json:"protocol"`
+	CallbackURL        string   `json:"callback_url"`
+	RetryMax           int      `json:"retry_max"`
+	RetryIntervals     string   `json:"retry_intervals"`
+	PriceMarkupPercent *float64 `json:"price_markup_percent"` // 指针类型，区分 0 和未传
+	PriceRoundingMode  *string  `json:"price_rounding_mode"`
+	AutoSyncPrice      *bool    `json:"auto_sync_price"`
 }
 
 // Update 更新连接
@@ -141,6 +157,19 @@ func (s *SiteConnectionService) Update(id uint, input UpdateConnectionInput) (*m
 	}
 	if strings.TrimSpace(input.RetryIntervals) != "" {
 		conn.RetryIntervals = strings.TrimSpace(input.RetryIntervals)
+	}
+	if input.PriceMarkupPercent != nil {
+		conn.PriceMarkupPercent = decimal.NewFromFloat(*input.PriceMarkupPercent)
+	}
+	if input.PriceRoundingMode != nil {
+		mode := strings.TrimSpace(*input.PriceRoundingMode)
+		if mode == "" {
+			mode = "none"
+		}
+		conn.PriceRoundingMode = mode
+	}
+	if input.AutoSyncPrice != nil {
+		conn.AutoSyncPrice = *input.AutoSyncPrice
 	}
 
 	if err := s.connRepo.Update(conn); err != nil {
