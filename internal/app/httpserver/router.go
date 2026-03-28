@@ -261,6 +261,9 @@ func SetupRouter(cfg *config.Config, c *container.Container) *gin.Engine {
 
 	// SEO 资源（动态生成）。
 	sitemaptransport.RegisterRoutes(r, sitemaptransport.NewHandler(c.SitemapService, sitemapbrand.New(c.SettingService)))
+	seoGroup := r.Group("/seo")
+	seoGroup.GET("/products/:slug", middleware.SEOProductHandler(c.ProductReadService))
+	seoGroup.GET("/blog/:slug", middleware.SEOBlogHandler(c.ContentPostService))
 
 	apiV1 := r.Group("/api/v1")
 	// 允许爬虫抓取公开接口用于渲染，但 JSON 响应本身不应进入搜索索引

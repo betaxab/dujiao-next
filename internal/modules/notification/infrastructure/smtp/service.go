@@ -24,15 +24,17 @@ import (
 )
 
 // writeStandardHeaders 写入 RFC 5322 要求的通用邮件头（Date、Message-ID、From、To、Subject、MIME-Version）。
-func writeStandardHeaders(buf *bytes.Buffer, from, to, subject, replyTo string) {
-	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	buf.WriteString(fmt.Sprintf("Message-ID: %s\r\n", generateMessageID(from)))
-	buf.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	buf.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	if normalized := normalizeReplyToHeader(replyTo); normalized != "" {
-		buf.WriteString(fmt.Sprintf("Reply-To: %s\r\n", normalized))
+func writeStandardHeaders(buf *bytes.Buffer, from, to, subject string, replyTo ...string) {
+	fmt.Fprintf(buf, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(buf, "Message-ID: %s\r\n", generateMessageID(from))
+	fmt.Fprintf(buf, "From: %s\r\n", from)
+	fmt.Fprintf(buf, "To: %s\r\n", to)
+	if len(replyTo) > 0 {
+		if normalized := normalizeReplyToHeader(replyTo[0]); normalized != "" {
+			fmt.Fprintf(buf, "Reply-To: %s\r\n", normalized)
+		}
 	}
-	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject)))
+	fmt.Fprintf(buf, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
 	buf.WriteString("MIME-Version: 1.0\r\n")
 }
 
@@ -67,19 +69,38 @@ func (s *Service) SetConfig(cfg *config.EmailConfig) {
 	s.cfg = cfg
 }
 
+var verifyCodeEmailHeaders = []emailHeader{
+	{Name: "Importance", Value: "high"},
+	{Name: "Priority", Value: "urgent"},
+	{Name: "X-Priority", Value: "1"},
+	{Name: "Auto-Submitted", Value: "auto-generated"},
+	{Name: "X-Auto-Response-Suppress", Value: "All"},
+}
+
+type emailHeader struct {
+	Name  string
+	Value string
+}
+
 // SendVerifyCode 发送邮箱验证码
 func (s *Service) SendVerifyCode(toEmail, code, purpose, locale string, brand mailbrand.Brand) error {
-	subject, body := buildVerifyCodeContent(code, purpose, locale, brand)
-	return s.sendTextEmail(toEmail, subject, body, brand)
+	input := notificationcontract.VerifyCodeEmailInput{
+		Code:     code,
+		Purpose:  purpose,
+		SiteName: brand.SiteName,
+		SiteURL:  brand.SiteURL,
+	}
+	subject, plainBody, htmlBody := s.buildVerifyCodeEmailParts(input, locale)
+	return s.sendAlternativeEmail(toEmail, subject, plainBody, htmlBody, verifyCodeEmailHeaders, brand)
 }
 
 // SendOrderStatusEmail 发送订单状态通知
 func (s *Service) SendOrderStatusEmail(toEmail string, input notificationcontract.OrderStatusEmailInput, locale string) error {
-	subject, body := buildOrderStatusContent(input, locale)
+	subject, body := s.buildOrderStatusEmail(input, locale)
 	if input.AttachmentName != "" && input.AttachmentContent != "" {
 		return s.sendEmailWithAttachment(toEmail, subject, body, input.AttachmentName, input.AttachmentContent, input.MailBrand)
 	}
-	return s.sendTextEmail(toEmail, subject, body, input.MailBrand)
+	return s.sendHTMLEmail(toEmail, subject, body, input.MailBrand)
 }
 
 // SendOrderStatusEmailWithTemplate 使用可配置模板发送订单状态通知
@@ -91,7 +112,8 @@ func (s *Service) SendOrderStatusEmailWithTemplate(toEmail string, input notific
 	if input.AttachmentName != "" && input.AttachmentContent != "" {
 		return s.sendEmailWithAttachment(toEmail, subject, body, input.AttachmentName, input.AttachmentContent, input.MailBrand)
 	}
-	return s.sendTextEmail(toEmail, subject, body, input.MailBrand)
+	bodyHTML := s.buildOrderStatusTemplateEmail(input, locale, subject, body)
+	return s.sendHTMLEmail(toEmail, subject, bodyHTML, input.MailBrand)
 }
 
 func buildOrderStatusContentFromTemplate(input notificationcontract.OrderStatusEmailInput, locale string, tmplSetting settingsmessaging.OrderEmailTemplateSetting) (string, string) {
@@ -184,7 +206,21 @@ func (s *Service) SendCustomEmail(toEmail, subject, body string) error {
 	return s.sendTextEmail(toEmail, subject, body)
 }
 
-func (s *Service) sendTextEmail(toEmail, subject, body string, brands ...mailbrand.Brand) error {
+func (s *Service) sendTextEmail(toEmail, subject, body string) error {
+	bodyHTML := renderEmbeddedEmail("generic", genericEmailData{
+		Paragraphs: splitEmailParagraphs(body),
+	}, emailLayoutData{
+		Lang:  emailLangCode(""),
+		Title: subject,
+	})
+	return s.sendHTMLEmail(toEmail, subject, bodyHTML)
+}
+
+func (s *Service) sendHTMLEmail(toEmail, subject, bodyHTML string, brands ...mailbrand.Brand) error {
+	return s.sendHTMLEmailWithHeaders(toEmail, subject, bodyHTML, nil, brands...)
+}
+
+func (s *Service) sendHTMLEmailWithHeaders(toEmail, subject, bodyHTML string, headers []emailHeader, brands ...mailbrand.Brand) error {
 	if telegramidentity.IsPlaceholderEmail(toEmail) {
 		return nil
 	}
@@ -193,7 +229,20 @@ func (s *Service) sendTextEmail(toEmail, subject, body string, brands ...mailbra
 	if err != nil {
 		return err
 	}
-	msg := buildEmailMessage(from, toEmail, subject, body, brand.ReplyTo)
+	msg := buildEmailMessageWithHeaders(from, toEmail, subject, bodyHTML, headers, brand.ReplyTo)
+	return s.sendSMTPMessage(addr, toEmail, []byte(msg))
+}
+
+func (s *Service) sendAlternativeEmail(toEmail, subject, plainBody, htmlBody string, headers []emailHeader, brands ...mailbrand.Brand) error {
+	if telegramidentity.IsPlaceholderEmail(toEmail) {
+		return nil
+	}
+	brand := firstMailBrand(brands)
+	from, addr, err := s.prepareSMTPEnvelope(toEmail, brand.FromName)
+	if err != nil {
+		return err
+	}
+	msg := buildAlternativeEmailMessage(from, toEmail, subject, plainBody, htmlBody, headers, brand.ReplyTo)
 	return s.sendSMTPMessage(addr, toEmail, []byte(msg))
 }
 
@@ -211,7 +260,7 @@ func (s *Service) sendEmailWithAttachment(toEmail, subject, body, attachName, at
 }
 
 // prepareSMTPEnvelope 校验配置与收件人，并返回发件地址与 SMTP 服务器地址。
-func (s *Service) prepareSMTPEnvelope(toEmail, fromNameOverride string) (string, string, error) {
+func (s *Service) prepareSMTPEnvelope(toEmail string, fromNameOverrides ...string) (string, string, error) {
 	if s.cfg == nil || !s.cfg.Enabled {
 		return "", "", notificationcontract.ErrEmailServiceDisabled
 	}
@@ -221,7 +270,10 @@ func (s *Service) prepareSMTPEnvelope(toEmail, fromNameOverride string) (string,
 	if _, err := mail.ParseAddress(toEmail); err != nil {
 		return "", "", notificationcontract.ErrInvalidEmail
 	}
-	fromName := strings.TrimSpace(fromNameOverride)
+	fromName := ""
+	if len(fromNameOverrides) > 0 {
+		fromName = strings.TrimSpace(fromNameOverrides[0])
+	}
 	if fromName == "" {
 		fromName = s.cfg.FromName
 	}
@@ -242,142 +294,335 @@ func (s *Service) sendSMTPMessage(addr, toEmail string, msg []byte) error {
 	return normalizeEmailSendError(sendMailPlain(addr, s.cfg.Host, s.cfg.From, recipients, msg, s.cfg.Username, s.cfg.Password))
 }
 
-func buildEmailMessageWithAttachment(from, to, subject, body, attachName, attachContent, replyTo string) string {
+func buildEmailMessageWithAttachment(from, to, subject, body, attachName, attachContent string, replyTo ...string) string {
 	boundary := "----=_DujiaoNextBoundary_" + fmt.Sprintf("%d", len(body)+len(attachContent))
 
 	var buf bytes.Buffer
-	writeStandardHeaders(&buf, from, to, subject, replyTo)
-	buf.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary))
+	writeStandardHeaders(&buf, from, to, subject, replyTo...)
+	fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary)
 	buf.WriteString("\r\n")
 
 	// 正文部分
-	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	fmt.Fprintf(&buf, "--%s\r\n", boundary)
+	buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
 	buf.WriteString("\r\n")
 	buf.WriteString(base64.StdEncoding.EncodeToString([]byte(body)))
 	buf.WriteString("\r\n")
 
 	// 附件部分
-	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	fmt.Fprintf(&buf, "--%s\r\n", boundary)
 	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	buf.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", mime.QEncoding.Encode("UTF-8", attachName)))
+	fmt.Fprintf(&buf, "Content-Disposition: attachment; filename=\"%s\"\r\n", mime.QEncoding.Encode("UTF-8", attachName))
 	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
 	buf.WriteString("\r\n")
 	buf.WriteString(base64.StdEncoding.EncodeToString([]byte(attachContent)))
 	buf.WriteString("\r\n")
 
 	// 结束边界
-	buf.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	fmt.Fprintf(&buf, "--%s--\r\n", boundary)
 
 	return buf.String()
 }
 
+func (s *Service) buildVerifyCodeEmail(input notificationcontract.VerifyCodeEmailInput, locale string) (string, string) {
+	subject, _, htmlBody := s.buildVerifyCodeEmailParts(input, locale)
+	return subject, htmlBody
+}
+
+// buildVerifyCodeContent 保留纯内容构建入口，供测试及不经过 SMTP 发送流程的调用方使用。
 func buildVerifyCodeContent(code, purpose, locale string, brands ...mailbrand.Brand) (string, string) {
-	normalized := normalizeLocale(locale)
-	purposeKey := strings.ToLower(strings.TrimSpace(purpose))
 	brand := firstMailBrand(brands)
+	return (&Service{}).buildVerifyCodeEmail(notificationcontract.VerifyCodeEmailInput{
+		Code:     code,
+		Purpose:  purpose,
+		SiteName: brand.SiteName,
+		SiteURL:  brand.SiteURL,
+	}, locale)
+}
+
+func (s *Service) buildVerifyCodeEmailParts(input notificationcontract.VerifyCodeEmailInput, locale string) (string, string, string) {
+	normalized := normalizeLocale(locale)
+	siteName := strings.TrimSpace(input.SiteName)
+	siteURL := strings.TrimRight(strings.TrimSpace(input.SiteURL), "/")
+	expireMinutes := 10
+	if s != nil && s.cfg != nil && s.cfg.VerifyCode.ExpireMinutes > 0 {
+		expireMinutes = s.cfg.VerifyCode.ExpireMinutes
+	}
+
+	var (
+		subject      string
+		greeting     string
+		thanks       string
+		description  string
+		expirePrefix string
+		expireStrong string
+		expireSuffix string
+		ignoreText   string
+		supportText  string
+		siteLabel    string
+	)
+
+	purposeKey := strings.ToLower(strings.TrimSpace(input.Purpose))
 	switch normalized {
-	case i18n.LocaleTW:
-		subject := "郵箱驗證碼"
-		purposeText := "郵箱驗證"
-		switch purposeKey {
-		case constants.VerifyPurposeRegister:
-			subject = "註冊驗證碼"
-			purposeText = "註冊"
-		case constants.VerifyPurposeReset:
-			subject = "重置密碼驗證碼"
-			purposeText = "重置密碼"
-		case constants.VerifyPurposeTelegramBind:
-			subject = "Telegram 綁定驗證碼"
-			purposeText = "綁定 Telegram"
-		case constants.VerifyPurposeChangeEmailOld, constants.VerifyPurposeChangeEmailNew:
-			subject = "更換郵箱驗證碼"
-			purposeText = "更換郵箱"
-		}
-		body := fmt.Sprintf("您的驗證碼是：%s\n\n該驗證碼用於 %s，請勿洩露。", code, purposeText)
-		return applyVerifyCodeBrand(normalized, subject, body, brand)
-	case i18n.LocaleEN:
-		subject := "Email Verification Code"
-		purposeText := "email verification"
-		switch purposeKey {
-		case constants.VerifyPurposeRegister:
-			subject = "Registration Code"
-			purposeText = "registration"
-		case constants.VerifyPurposeReset:
-			subject = "Password Reset Code"
-			purposeText = "password reset"
-		case constants.VerifyPurposeTelegramBind:
-			subject = "Telegram Binding Code"
-			purposeText = "binding Telegram"
-		case constants.VerifyPurposeChangeEmailOld, constants.VerifyPurposeChangeEmailNew:
-			subject = "Change Email Code"
-			purposeText = "change email"
-		}
-		body := fmt.Sprintf("Your verification code is: %s\n\nThis code is for %s. Do not share it.", code, purposeText)
-		return applyVerifyCodeBrand(normalized, subject, body, brand)
-	default:
-		subject := "邮箱验证码"
-		purposeText := "邮箱验证"
+	case i18n.LocaleZH:
+		subject = "邮箱验证码"
+		greeting = "您好，"
+		thanks = fmt.Sprintf("感谢您注册 %s！", siteName)
+		description = "您的一次性验证码为："
+		expirePrefix = "此验证码将于 "
+		expireStrong = fmt.Sprintf("%d 分钟", expireMinutes)
+		expireSuffix = " 后失效。请使用此验证码完成您的注册流程。"
+		ignoreText = "如果该项请求不是您发出的，请忽略本邮件或者联系网站支持。"
+		supportText = "本邮件为系统发送，请勿直接回复本邮件！如果您有任何问题或者需要帮助，请登录我们的官方网站，联系我们的技术支持团队。"
+		siteLabel = "官方网站："
 		switch purposeKey {
 		case constants.VerifyPurposeRegister:
 			subject = "注册验证码"
-			purposeText = "注册"
 		case constants.VerifyPurposeReset:
 			subject = "重置密码验证码"
-			purposeText = "重置密码"
+			thanks = fmt.Sprintf("您正在 %s 申请重置密码。", siteName)
+			expireSuffix = " 后失效。请使用此验证码完成密码重置流程。"
 		case constants.VerifyPurposeTelegramBind:
 			subject = "Telegram 绑定验证码"
-			purposeText = "绑定 Telegram"
+			thanks = fmt.Sprintf("您正在 %s 绑定 Telegram。", siteName)
+			expireSuffix = " 后失效。请使用此验证码完成 Telegram 绑定流程。"
 		case constants.VerifyPurposeChangeEmailOld, constants.VerifyPurposeChangeEmailNew:
 			subject = "更换邮箱验证码"
-			purposeText = "更换邮箱"
+			thanks = fmt.Sprintf("您正在 %s 验证更换邮箱请求。", siteName)
+			expireSuffix = " 后失效。请使用此验证码完成更换邮箱流程。"
 		}
-		body := fmt.Sprintf("您的验证码是：%s\n\n该验证码用于 %s，请勿泄露。", code, purposeText)
-		return applyVerifyCodeBrand(normalized, subject, body, brand)
-	}
-}
-
-func firstMailBrand(brands []mailbrand.Brand) mailbrand.Brand {
-	if len(brands) == 0 {
-		return mailbrand.Brand{}
-	}
-	return brands[0]
-}
-
-func applyVerifyCodeBrand(locale, subject, body string, brand mailbrand.Brand) (string, string) {
-	siteName := strings.TrimSpace(brand.SiteName)
-	siteURL := strings.TrimRight(strings.TrimSpace(brand.SiteURL), "/")
-	if siteName == "" && siteURL == "" {
-		return subject, body
-	}
-	if siteName != "" {
-		subject = siteName + " - " + subject
-	}
-	switch locale {
 	case i18n.LocaleTW:
-		if siteName != "" {
-			body += "\n\n站點：" + siteName
-		}
-		if siteURL != "" {
-			body += "\n網址：" + siteURL
+		subject = "郵箱驗證碼"
+		greeting = "您好，"
+		thanks = fmt.Sprintf("感謝您註冊 %s！", siteName)
+		description = "您的一次性驗證碼為："
+		expirePrefix = "此驗證碼將於 "
+		expireStrong = fmt.Sprintf("%d 分鐘", expireMinutes)
+		expireSuffix = " 後失效。請使用此驗證碼完成您的流程。"
+		ignoreText = "如果該請求不是您發出的，請忽略本郵件或聯絡網站支援。"
+		supportText = "本郵件由系統自動發送，請勿直接回覆本郵件！如果您有任何問題或需要協助，請登入我們的官方網站聯絡技術支援團隊。"
+		siteLabel = "官方網站："
+		switch purposeKey {
+		case constants.VerifyPurposeRegister:
+			subject = "註冊驗證碼"
+			expireSuffix = " 後失效。請使用此驗證碼完成您的註冊流程。"
+		case constants.VerifyPurposeReset:
+			subject = "重置密碼驗證碼"
+			thanks = fmt.Sprintf("您正在 %s 申請重置密碼。", siteName)
+			expireSuffix = " 後失效。請使用此驗證碼完成密碼重置流程。"
+		case constants.VerifyPurposeTelegramBind:
+			subject = "Telegram 綁定驗證碼"
+			thanks = fmt.Sprintf("您正在 %s 綁定 Telegram。", siteName)
+			expireSuffix = " 後失效。請使用此驗證碼完成 Telegram 綁定流程。"
+		case constants.VerifyPurposeChangeEmailOld, constants.VerifyPurposeChangeEmailNew:
+			subject = "更換郵箱驗證碼"
+			thanks = fmt.Sprintf("您正在 %s 驗證更換郵箱請求。", siteName)
+			expireSuffix = " 後失效。請使用此驗證碼完成更換郵箱流程。"
 		}
 	case i18n.LocaleEN:
-		if siteName != "" {
-			body += "\n\nSite: " + siteName
-		}
-		if siteURL != "" {
-			body += "\nURL: " + siteURL
-		}
-	default:
-		if siteName != "" {
-			body += "\n\n站点：" + siteName
-		}
-		if siteURL != "" {
-			body += "\n网址：" + siteURL
+		subject = "Email Verification Code"
+		greeting = "Hello,"
+		thanks = fmt.Sprintf("Thank you for registering with %s.", siteName)
+		description = "Your one-time verification code is:"
+		expirePrefix = "This code will expire in "
+		expireStrong = fmt.Sprintf("%d minutes", expireMinutes)
+		expireSuffix = ". Please use it to complete your registration."
+		ignoreText = "If you did not request this, please ignore this email or contact support."
+		supportText = "This is an automated email. Please do not reply directly. If you need help, please visit our official website and contact the support team."
+		siteLabel = "Official website:"
+		switch purposeKey {
+		case constants.VerifyPurposeRegister:
+			subject = "Registration Code"
+		case constants.VerifyPurposeReset:
+			subject = "Password Reset Code"
+			thanks = fmt.Sprintf("You requested a password reset for %s.", siteName)
+			expireSuffix = ". Please use it to complete your password reset."
+		case constants.VerifyPurposeTelegramBind:
+			subject = "Telegram Binding Code"
+			thanks = fmt.Sprintf("You are binding Telegram to %s.", siteName)
+			expireSuffix = ". Please use it to complete Telegram binding."
+		case constants.VerifyPurposeChangeEmailOld, constants.VerifyPurposeChangeEmailNew:
+			subject = "Change Email Code"
+			thanks = fmt.Sprintf("You requested an email change for %s.", siteName)
+			expireSuffix = ". Please use it to complete the email change."
 		}
 	}
+
+	if siteName != "" {
+		subject = fmt.Sprintf("[%s] %s", siteName, subject)
+	}
+
+	data := verifyCodeEmailData{
+		emailInfoData: emailInfoData{
+			SiteName:    siteName,
+			SiteURL:     siteURL,
+			SupportText: supportText,
+			SiteLabel:   siteLabel,
+			ShowInfo:    true,
+		},
+		Greeting:     greeting,
+		Thanks:       thanks,
+		Description:  description,
+		Code:         strings.TrimSpace(input.Code),
+		ExpirePrefix: expirePrefix,
+		ExpireStrong: expireStrong,
+		ExpireSuffix: expireSuffix,
+		IgnoreText:   ignoreText,
+	}
+	htmlBody := renderEmbeddedEmail("verify_code", data, emailLayoutData{
+		Lang:     emailLangCode(normalized),
+		Title:    subject,
+		SiteName: siteName,
+	})
+	plainBody := buildVerifyCodePlainText(data)
+	return subject, plainBody, htmlBody
+}
+
+func buildVerifyCodePlainText(data verifyCodeEmailData) string {
+	lines := []string{
+		data.Greeting,
+		data.Thanks,
+		data.Description,
+		data.Code,
+		data.ExpirePrefix + data.ExpireStrong + data.ExpireSuffix,
+		data.IgnoreText,
+		data.SupportText,
+	}
+	if data.SiteURL != "" {
+		lines = append(lines, strings.TrimSpace(data.SiteLabel+" "+data.SiteURL))
+	}
+	return strings.Join(lines, "\n\n")
+}
+
+func (s *Service) buildOrderStatusEmail(input notificationcontract.OrderStatusEmailInput, locale string) (string, string) {
+	normalized := normalizeLocale(locale)
+	siteName := strings.TrimSpace(input.SiteName)
+	siteURL := strings.TrimRight(strings.TrimSpace(input.SiteURL), "/")
+	subject, plainBody := buildOrderStatusContent(input, locale)
+	statusKey := "order.status." + strings.ToLower(strings.TrimSpace(input.Status))
+	statusLabel := i18n.T(normalized, statusKey)
+	if statusLabel == statusKey {
+		statusLabel = input.Status
+	}
+
+	var (
+		greeting        string
+		intro           string
+		orderNoLabel    string
+		statusLabelText string
+		amountLabel     string
+		deliveryLabel   string
+		guestTipLabel   string
+	)
+
+	switch normalized {
+	case i18n.LocaleZH:
+		greeting = "您好，"
+		intro = fmt.Sprintf("您在 %s 的订单状态已更新。", siteName)
+		orderNoLabel = "订单号"
+		statusLabelText = "订单状态"
+		amountLabel = "订单金额"
+		deliveryLabel = "交付内容"
+		guestTipLabel = "游客提示"
+	case i18n.LocaleTW:
+		greeting = "您好，"
+		intro = fmt.Sprintf("您在 %s 的訂單狀態已更新。", siteName)
+		orderNoLabel = "訂單號"
+		statusLabelText = "訂單狀態"
+		amountLabel = "訂單金額"
+		deliveryLabel = "交付內容"
+		guestTipLabel = "遊客提示"
+	case i18n.LocaleEN:
+		greeting = "Hello,"
+		intro = fmt.Sprintf("Your order status at %s has been updated.", siteName)
+		orderNoLabel = "Order No."
+		statusLabelText = "Status"
+		amountLabel = "Amount"
+		deliveryLabel = "Delivery"
+		guestTipLabel = "Guest tip"
+	}
+
+	var guestTip string
+	if input.IsGuest {
+		tipKey := "email.order_status.guest_tip"
+		tip := i18n.T(normalized, tipKey)
+		if tip != tipKey {
+			guestTip = tip
+		}
+	}
+
+	infoText := resolveOrderStatusEmailInfoText(normalized)
+	body := renderEmbeddedEmail("order_status", orderStatusEmailData{
+		emailInfoData: emailInfoData{
+			SiteName:    siteName,
+			SiteURL:     siteURL,
+			SupportText: infoText.SupportText,
+			SiteLabel:   infoText.SiteLabel,
+			ShowInfo:    siteURL != "",
+		},
+		ShowSummary:     true,
+		Greeting:        greeting,
+		Intro:           intro,
+		OrderNoLabel:    orderNoLabel,
+		OrderNo:         strings.TrimSpace(input.OrderNo),
+		StatusLabelText: statusLabelText,
+		StatusLabel:     statusLabel,
+		AmountLabel:     amountLabel,
+		Amount:          strings.TrimSpace(input.Amount.String() + " " + input.Currency),
+		Paragraphs:      splitEmailParagraphs(plainBody),
+		DeliveryLabel:   deliveryLabel,
+		FulfillmentInfo: strings.TrimSpace(input.FulfillmentInfo),
+		GuestTipLabel:   guestTipLabel,
+		GuestTip:        guestTip,
+	}, emailLayoutData{
+		Lang:     emailLangCode(normalized),
+		Title:    subject,
+		SiteName: siteName,
+	})
 	return subject, body
+}
+
+func (s *Service) buildOrderStatusTemplateEmail(input notificationcontract.OrderStatusEmailInput, locale, subject, plainBody string) string {
+	normalized := normalizeLocale(locale)
+	siteName := strings.TrimSpace(input.SiteName)
+	siteURL := strings.TrimRight(strings.TrimSpace(input.SiteURL), "/")
+	infoText := resolveOrderStatusEmailInfoText(normalized)
+	return renderEmbeddedEmail("order_status", orderStatusEmailData{
+		emailInfoData: emailInfoData{
+			SiteName:    siteName,
+			SiteURL:     siteURL,
+			SupportText: infoText.SupportText,
+			SiteLabel:   infoText.SiteLabel,
+			ShowInfo:    siteURL != "",
+		},
+		Paragraphs: splitEmailParagraphs(plainBody),
+	}, emailLayoutData{
+		Lang:     emailLangCode(normalized),
+		Title:    subject,
+		SiteName: siteName,
+	})
+}
+
+type orderStatusEmailInfoText struct {
+	SupportText string
+	SiteLabel   string
+}
+
+func resolveOrderStatusEmailInfoText(locale string) orderStatusEmailInfoText {
+	var text orderStatusEmailInfoText
+	switch normalizeLocale(locale) {
+	case i18n.LocaleZH:
+		text.SupportText = "如果您有任何问题或者需要帮助，请登录我们的官方网站，联系我们的技术支持团队，请勿直接回复本邮件。"
+		text.SiteLabel = "官方网站："
+	case i18n.LocaleTW:
+		text.SupportText = "如果您有任何問題或需要協助，請登入我們的官方網站聯絡技術支援團隊。請勿直接回復本郵件。"
+		text.SiteLabel = "官方網站："
+	case i18n.LocaleEN:
+		text.SupportText = "If you need help, please visit our official website and contact the support team. Please do not reply to this email directly."
+		text.SiteLabel = "Official website:"
+	}
+	return text
 }
 
 func buildOrderStatusContent(input notificationcontract.OrderStatusEmailInput, locale string) (string, string) {
@@ -473,17 +718,72 @@ func normalizeReplyToHeader(raw string) string {
 	return addr.Address
 }
 
-func buildEmailMessage(from, to, subject, body string, replyTo ...string) string {
-	var buf bytes.Buffer
-	resolvedReplyTo := ""
-	if len(replyTo) > 0 {
-		resolvedReplyTo = replyTo[0]
+func firstMailBrand(brands []mailbrand.Brand) mailbrand.Brand {
+	if len(brands) == 0 {
+		return mailbrand.Brand{}
 	}
-	writeStandardHeaders(&buf, from, to, subject, resolvedReplyTo)
-	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	return brands[0]
+}
+
+func buildEmailMessage(from, to, subject, body string, replyTo ...string) string {
+	return buildEmailMessageWithHeaders(from, to, subject, body, nil, replyTo...)
+}
+
+func buildEmailMessageWithHeaders(from, to, subject, body string, headers []emailHeader, replyTo ...string) string {
+	var buf bytes.Buffer
+	writeStandardHeaders(&buf, from, to, subject, replyTo...)
+	for _, header := range headers {
+		fmt.Fprintf(&buf, "%s: %s\r\n", header.Name, header.Value)
+	}
+	buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	buf.WriteString("\r\n")
 	buf.WriteString(body)
 	return buf.String()
+}
+
+func buildAlternativeEmailMessage(from, to, subject, plainBody, htmlBody string, headers []emailHeader, replyTo ...string) string {
+	boundary := generateMIMEBoundary()
+
+	var buf bytes.Buffer
+	writeStandardHeaders(&buf, from, to, subject, replyTo...)
+	for _, header := range headers {
+		fmt.Fprintf(&buf, "%s: %s\r\n", header.Name, header.Value)
+	}
+	fmt.Fprintf(&buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary)
+	buf.WriteString("\r\n")
+
+	fmt.Fprintf(&buf, "--%s\r\n", boundary)
+	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+	buf.WriteString("\r\n")
+	writeMIMEBase64(&buf, []byte(plainBody))
+
+	fmt.Fprintf(&buf, "--%s\r\n", boundary)
+	buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+	buf.WriteString("\r\n")
+	writeMIMEBase64(&buf, []byte(htmlBody))
+
+	fmt.Fprintf(&buf, "--%s--\r\n", boundary)
+	return buf.String()
+}
+
+func writeMIMEBase64(buf *bytes.Buffer, data []byte) {
+	encoded := base64.StdEncoding.EncodeToString(data)
+	const lineLength = 76
+	for len(encoded) > lineLength {
+		buf.WriteString(encoded[:lineLength])
+		buf.WriteString("\r\n")
+		encoded = encoded[lineLength:]
+	}
+	buf.WriteString(encoded)
+	buf.WriteString("\r\n")
+}
+
+func generateMIMEBoundary() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return "----=_DujiaoNextAlternative_" + hex.EncodeToString(b[:])
 }
 
 func sendMailWithSSL(addr, host, from string, to []string, msg []byte, username, password string) (err error) {

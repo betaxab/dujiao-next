@@ -1,0 +1,150 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f6f9;
+      color: #333333;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 20px auto;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .email-header {
+      background-color: #0071e3;
+      padding: 20px;
+      text-align: center;
+      color: #ffffff;
+    }
+    .email-header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    .email-content {
+      padding: 25px;
+      color: #555555;
+      line-height: 1.6;
+    }
+    .email-info {
+      padding: 16px 24px 0 24px;
+      border-top: 1px solid #eef2f7;
+    }
+    .email-info p {
+      margin: 0 0 8px;
+      font-size: 12px;
+      line-height: 1.7;
+      color: #6b7280;
+    }
+    .otp-code {
+      box-sizing: border-box;
+      max-width: 250px;
+      width: 100%;
+      margin: 20px auto;
+      padding: 15px;
+      border-radius: 6px;
+      background-color: #f9f9f9;
+      color: #0071e3;
+      font-size: 32px;
+      font-weight: bold;
+      letter-spacing: 3px;
+      text-align: center;
+    }
+    .order-summary {
+      margin: 20px 0;
+      padding: 18px;
+      border: 1px solid #d7e8ff;
+      border-radius: 8px;
+      background: #f8fbff;
+    }
+    .order-summary p {
+      margin: 0 0 10px;
+    }
+    .order-summary p:last-child {
+      margin-bottom: 0;
+    }
+    .delivery-content {
+      margin-top: 20px;
+    }
+    .delivery-payload {
+      padding: 14px;
+      border: 1px solid #eef2f7;
+      border-radius: 6px;
+      background: #f9f9f9;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .guest-tip {
+      margin-top: 20px;
+      padding: 14px;
+      border: 1px solid #fed7aa;
+      border-radius: 6px;
+      background: #fff7ed;
+    }
+    .guest-tip p {
+      margin: 0;
+    }
+    .footer {
+      padding: 15px;
+      background-color: #f9f9f9;
+      color: #777777;
+      font-size: 12px;
+      text-align: center;
+    }
+    .footer p {
+      margin: 0 0 8px;
+    }
+    .footer p:last-child {
+      margin-bottom: 0;
+    }
+    .email-info a,
+    .footer a {
+      color: #ff9900;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="email-header">
+      <h1>{{.SiteName}}</h1>
+    </div>
+    {{.Content}}
+  </div>
+</body>
+</html>
+{{end}}
+
+{{define "email_info"}}
+{{if .ShowInfo}}
+<div class="email-info">
+  <p>{{.SupportText}}</p>
+  {{if .SiteURL}}
+  <p>{{.SiteLabel}} <a href="{{.SiteURL}}">{{.SiteURL}}</a></p>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "email_footer"}}
+<div class="footer">
+  <p>
+    <span>Telegram 群组: <a href="https://t.me/hellotaozi" target="_blank">@hellotaozi</a></span>
+    |
+    <span>Telegarm 频道：<a href="https://t.me/taozinews" target="_blank">@taozinews</a></span>
+  </p>
+  <p>&copy; 2026 {{.SiteName}}. All rights reserved.</p>
+</div>
+{{end}}

@@ -1,0 +1,12 @@
+{{define "verify_code"}}
+<div class="email-content">
+  <p>{{.Greeting}}</p>
+  <p>{{.Thanks}}</p>
+  <p>{{.Description}}</p>
+  <div class="otp-code">{{.Code}}</div>
+  <p>{{.ExpirePrefix}}<strong>{{.ExpireStrong}}</strong>{{.ExpireSuffix}}</p>
+  <p>{{.IgnoreText}}</p>
+</div>
+{{template "email_info" .}}
+{{template "email_footer" .}}
+{{end}}

@@ -1,7 +1,9 @@
 package smtp
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -12,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/dujiao-next/internal/config"
+	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/i18n"
 	notificationcontract "github.com/dujiao-next/internal/modules/notification/contract"
 	settingsmessaging "github.com/dujiao-next/internal/modules/settings/schema/messaging"
@@ -21,7 +24,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestBuildOrderStatusContent(t *testing.T) {
+func TestBuildOrderStatusMessage(t *testing.T) {
 	tests := []struct {
 		name                string
 		locale              string
@@ -224,6 +227,204 @@ func TestSendTextEmailSkipTelegramPlaceholder(t *testing.T) {
 	service := &Service{}
 	if err := service.sendTextEmail("telegram_6059928735@login.local", "subject", "body"); err != nil {
 		t.Fatalf("sendTextEmail() should skip telegram placeholder email, got %v", err)
+	}
+}
+
+func TestBuildEmailMessageUsesHTMLContentType(t *testing.T) {
+	msg := buildEmailMessage("sender@example.com", "receiver@example.com", "subject", "<p>Hello</p>")
+	if !strings.Contains(msg, "Content-Type: text/html; charset=UTF-8\r\n") {
+		t.Fatalf("expected html content type, got: %s", msg)
+	}
+	if strings.Contains(msg, "Content-Type: text/plain; charset=UTF-8\r\n") {
+		t.Fatalf("message should not use text/plain content type, got: %s", msg)
+	}
+	if !strings.Contains(msg, "\r\n\r\n<p>Hello</p>") {
+		t.Fatalf("html body not found after headers, got: %s", msg)
+	}
+}
+
+func TestBuildEmailMessageWithVerifyCodeHeaders(t *testing.T) {
+	msg := buildEmailMessageWithHeaders(
+		"sender@example.com",
+		"receiver@example.com",
+		"subject",
+		"<p>Hello</p>",
+		verifyCodeEmailHeaders,
+	)
+	for _, header := range []string{
+		"Importance: high\r\n",
+		"Priority: urgent\r\n",
+		"X-Priority: 1\r\n",
+		"Auto-Submitted: auto-generated\r\n",
+		"X-Auto-Response-Suppress: All\r\n",
+	} {
+		if !strings.Contains(msg, header) {
+			t.Fatalf("expected header %q, got: %s", header, msg)
+		}
+	}
+}
+
+func TestBuildAlternativeEmailMessageIncludesPlainAndHTMLParts(t *testing.T) {
+	plainBody := "Your verification code is 123456."
+	htmlBody := "<p>Your verification code is <strong>123456</strong>.</p>"
+	msg := buildAlternativeEmailMessage(
+		"sender@example.com",
+		"receiver@example.com",
+		"Verification code",
+		plainBody,
+		htmlBody,
+		verifyCodeEmailHeaders,
+	)
+
+	for _, value := range []string{
+		"Content-Type: multipart/alternative; boundary=\"",
+		"Content-Type: text/plain; charset=UTF-8\r\n",
+		"Content-Type: text/html; charset=UTF-8\r\n",
+		base64.StdEncoding.EncodeToString([]byte(plainBody)),
+		"Auto-Submitted: auto-generated\r\n",
+		"X-Auto-Response-Suppress: All\r\n",
+	} {
+		if !strings.Contains(msg, value) {
+			t.Fatalf("alternative message missing %q: %s", value, msg)
+		}
+	}
+	var encodedHTML bytes.Buffer
+	writeMIMEBase64(&encodedHTML, []byte(htmlBody))
+	if !strings.Contains(msg, encodedHTML.String()) {
+		t.Fatalf("alternative message missing wrapped HTML body: %s", msg)
+	}
+}
+
+func TestBuildEmailMessageWithAttachmentUsesHTMLBodyPart(t *testing.T) {
+	body := "<div>hello</div>"
+	msg := buildEmailMessageWithAttachment(
+		"sender@example.com",
+		"receiver@example.com",
+		"subject",
+		body,
+		"codes.txt",
+		"CODE-1",
+	)
+	htmlPartHeader := "Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+	if !strings.Contains(msg, htmlPartHeader) {
+		t.Fatalf("expected html body part headers, got: %s", msg)
+	}
+	if !strings.Contains(msg, base64.StdEncoding.EncodeToString([]byte(body))) {
+		t.Fatalf("expected encoded html body content, got: %s", msg)
+	}
+}
+
+func TestBuildVerifyCodeEmailUsesInputSiteBrand(t *testing.T) {
+	service := New(&config.EmailConfig{
+		FromName: "Config Shop",
+		VerifyCode: config.VerifyCodeConfig{
+			ExpireMinutes: 15,
+		},
+	})
+
+	subject, body := service.buildVerifyCodeEmail(notificationcontract.VerifyCodeEmailInput{
+		Code:     " 123456 ",
+		Purpose:  "reset",
+		SiteName: " Input Shop ",
+		SiteURL:  " https://example.com/path/ ",
+	}, i18n.LocaleEN)
+
+	if subject != "[Input Shop] Password Reset Code" {
+		t.Fatalf("unexpected subject: %s", subject)
+	}
+	if !strings.Contains(body, "You requested a password reset for Input Shop.") {
+		t.Fatalf("body should use input site name, got: %s", body)
+	}
+	if strings.Contains(body, "Config Shop") {
+		t.Fatalf("body should not use config site name when input site name is provided, got: %s", body)
+	}
+	if !strings.Contains(body, "https://example.com/path") {
+		t.Fatalf("body should include trimmed input site URL, got: %s", body)
+	}
+	if strings.Contains(body, "https://example.com/path/") {
+		t.Fatalf("body should trim trailing slash from input site URL, got: %s", body)
+	}
+	if !strings.Contains(body, "<div class=\"otp-code\">123456</div>") {
+		t.Fatalf("body should include trimmed verify code, got: %s", body)
+	}
+	if !strings.Contains(body, "<strong>15 minutes</strong>") {
+		t.Fatalf("body should use configured expiration minutes, got: %s", body)
+	}
+}
+
+func TestBuildVerifyCodeEmailKeepsDefaultSubjectWithoutSiteName(t *testing.T) {
+	service := New(&config.EmailConfig{})
+	subject, _ := service.buildVerifyCodeEmail(notificationcontract.VerifyCodeEmailInput{
+		Code:    "123456",
+		Purpose: constants.VerifyPurposeRegister,
+	}, i18n.LocaleEN)
+
+	if subject != "Registration Code" {
+		t.Fatalf("unexpected subject without site name: %s", subject)
+	}
+}
+
+func TestBuildVerifyCodeEmailIncludesAutomatedNotice(t *testing.T) {
+	service := New(&config.EmailConfig{})
+	_, plainBody, htmlBody := service.buildVerifyCodeEmailParts(notificationcontract.VerifyCodeEmailInput{
+		Code:     "123456",
+		Purpose:  constants.VerifyPurposeRegister,
+		SiteName: "示例站点",
+	}, i18n.LocaleZH)
+
+	for format, body := range map[string]string{"plain": plainBody, "html": htmlBody} {
+		if !strings.Contains(body, "本邮件为系统发送，请勿直接回复本邮件！") {
+			t.Fatalf("%s verify code email should include automated notice: %s", format, body)
+		}
+		if !strings.Contains(body, "123456") {
+			t.Fatalf("%s verify code email should include code: %s", format, body)
+		}
+	}
+}
+
+func TestEmbeddedEmailTemplatesEscapeDynamicContent(t *testing.T) {
+	service := New(&config.EmailConfig{})
+	_, body := service.buildVerifyCodeEmail(notificationcontract.VerifyCodeEmailInput{
+		Code:     `<script>alert("code")</script>`,
+		SiteName: `<b>unsafe</b>`,
+		SiteURL:  `https://example.com/?a=1&b=2`,
+	}, i18n.LocaleEN)
+
+	for _, unsafe := range []string{
+		`<script>alert("code")</script>`,
+		`<b>unsafe</b>`,
+		`href="https://example.com/?a=1&b=2"`,
+	} {
+		if strings.Contains(body, unsafe) {
+			t.Fatalf("email template did not escape %q: %s", unsafe, body)
+		}
+	}
+	for _, escaped := range []string{
+		`&lt;script&gt;alert(&#34;code&#34;)&lt;/script&gt;`,
+		`&lt;b&gt;unsafe&lt;/b&gt;`,
+		`href="https://example.com/?a=1&amp;b=2"`,
+	} {
+		if !strings.Contains(body, escaped) {
+			t.Fatalf("email template missing escaped value %q: %s", escaped, body)
+		}
+	}
+}
+
+func TestVerifyCodeEmailKeepsSupportTextWithoutSiteURL(t *testing.T) {
+	service := New(&config.EmailConfig{})
+	_, body := service.buildVerifyCodeEmail(notificationcontract.VerifyCodeEmailInput{
+		Code:     "123456",
+		SiteName: "Example",
+	}, i18n.LocaleEN)
+
+	if !strings.Contains(body, "This is an automated email. Please do not reply directly.") {
+		t.Fatalf("verify code email should identify itself as automated: %s", body)
+	}
+	if !strings.Contains(body, "If you need help, please visit our official website") {
+		t.Fatalf("verify code email should keep support text without site URL: %s", body)
+	}
+	if strings.Contains(body, "Official website:") {
+		t.Fatalf("verify code email should not render an empty site URL: %s", body)
 	}
 }
 
@@ -431,7 +632,7 @@ func newSMTPTestClient(addr, host string, port int, useStartTLS, insecureSkipVer
 
 // 仅是针对 Office365 SMTP 服务器的集成测试，确保 Service 能够成功发送邮件并正确处理服务器的响应。
 // 需要在环境变量中设置 TEST_OFFICE365_SEND=1 和有效的 TEST_OFFICE365_PASSWORD 来运行此测试。
-func TestEmailServiceSendOffice365Integration(t *testing.T) {
+func TestServiceSendOffice365Integration(t *testing.T) {
 	if strings.TrimSpace(os.Getenv("TEST_OFFICE365_SEND")) != "1" {
 		t.Skip("set TEST_OFFICE365_SEND=1 to send a real email via Office365")
 	}
