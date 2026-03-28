@@ -258,6 +258,9 @@ func SetupRouter(cfg *config.Config, c *container.Container) *gin.Engine {
 
 	// SEO 资源（动态生成）。
 	sitemaptransport.RegisterRoutes(r, sitemaptransport.NewHandler(c.SitemapService, sitemapbrand.New(c.SettingService)))
+	seoGroup := r.Group("/seo")
+	seoGroup.GET("/products/:slug", middleware.SEOProductHandler(c.ProductReadService))
+	seoGroup.GET("/blog/:slug", middleware.SEOBlogHandler(c.ContentPostService))
 
 	apiV1 := r.Group("/api/v1")
 	registerStorefrontRoutes(apiV1, cfg, c, publicContentHandler, publicCatalogHandler, publicCategoryHandler, userResellerHandler, userResellerProductSettingHandler, userResellerFinanceHandler, userResellerOrderHandler, userApiCredentialHandler, userAuditLogHandler, userGiftCardHandler, publicMemberLevelHandler, userProfileHandler, userEmailHandler, userPasswordHandler, userVerifyHandler, userTelegramOIDCHandler, userTelegramHandler, userGoogleHandler, userLoginHandler, user2FAHandler, publicConfigHandler, userCartHandler, userOrderHandler, guestOrderHandler, orderPreviewHandler, orderCreateHandler, paymentLatestHandler, paymentWriteHandler, userWalletHandler, redisClient, loginRule, guestReadRule, guestWriteRule, giftCardRedeemRule)

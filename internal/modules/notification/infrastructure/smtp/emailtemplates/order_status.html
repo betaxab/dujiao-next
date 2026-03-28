@@ -1,0 +1,32 @@
+{{define "order_status"}}
+<div class="email-content">
+  {{if .ShowSummary}}
+  <p>{{.Greeting}}</p>
+  <p>{{.Intro}}</p>
+  <div class="order-summary">
+    <p><strong>{{.OrderNoLabel}}: </strong> {{.OrderNo}}</p>
+    <p><strong>{{.StatusLabelText}}: </strong> {{.StatusLabel}}</p>
+    <p><strong>{{.AmountLabel}}: </strong> {{.Amount}}</p>
+  </div>
+  {{end}}
+
+  {{range .Paragraphs}}
+  <p>{{.}}</p>
+  {{end}}
+
+  {{if .FulfillmentInfo}}
+  <div class="delivery-content">
+    <p><strong>{{.DeliveryLabel}}: </strong></p>
+    <div class="delivery-payload">{{.FulfillmentInfo}}</div>
+  </div>
+  {{end}}
+
+  {{if .GuestTip}}
+  <div class="guest-tip">
+    <p><strong>{{.GuestTipLabel}}: </strong> {{.GuestTip}}</p>
+  </div>
+  {{end}}
+</div>
+{{template "email_info" .}}
+{{template "email_footer" .}}
+{{end}}

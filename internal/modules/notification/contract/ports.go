@@ -23,6 +23,14 @@ type EmailSender interface {
 	SendCustomEmail(toEmail, subject, body string) error
 }
 
+// VerifyCodeEmailInput carries verification-code content and optional site branding.
+type VerifyCodeEmailInput struct {
+	Code     string
+	Purpose  string
+	SiteName string
+	SiteURL  string
+}
+
 // OrderStatusEmailInput carries the order facts required to render an email.
 type OrderStatusEmailInput struct {
 	OrderNo           string
