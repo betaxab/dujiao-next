@@ -27,6 +27,13 @@ type OrderEmailGuestTip struct {
 	ENUS string `json:"en-US"`
 }
 
+// OrderEmailFulfillmentAttachmentTip 交付内容附件提示（多语言）
+type OrderEmailFulfillmentAttachmentTip struct {
+	ZHCN string `json:"zh-CN"`
+	ZHTW string `json:"zh-TW"`
+	ENUS string `json:"en-US"`
+}
+
 // OrderEmailTemplatesSetting 所有订单邮件场景模板集合
 type OrderEmailTemplatesSetting struct {
 	Default              OrderEmailSceneTemplate `json:"default"`
@@ -38,8 +45,9 @@ type OrderEmailTemplatesSetting struct {
 
 // OrderEmailTemplateSetting 订单邮件模板配置
 type OrderEmailTemplateSetting struct {
-	Templates OrderEmailTemplatesSetting `json:"templates"`
-	GuestTip  OrderEmailGuestTip         `json:"guest_tip"`
+	Templates                OrderEmailTemplatesSetting         `json:"templates"`
+	GuestTip                 OrderEmailGuestTip                 `json:"guest_tip"`
+	FulfillmentAttachmentTip OrderEmailFulfillmentAttachmentTip `json:"fulfillment_attachment_tip"`
 }
 
 // --- Patch 结构 ---
@@ -64,6 +72,13 @@ type OrderEmailGuestTipPatch struct {
 	ENUS *string `json:"en-US"`
 }
 
+// OrderEmailFulfillmentAttachmentTipPatch 交付内容附件提示补丁
+type OrderEmailFulfillmentAttachmentTipPatch struct {
+	ZHCN *string `json:"zh-CN"`
+	ZHTW *string `json:"zh-TW"`
+	ENUS *string `json:"en-US"`
+}
+
 // OrderEmailTemplatesPatch 模板集合补丁
 type OrderEmailTemplatesPatch struct {
 	Default              *OrderEmailSceneTemplatePatch `json:"default"`
@@ -75,8 +90,9 @@ type OrderEmailTemplatesPatch struct {
 
 // OrderEmailTemplateSettingPatch 订单邮件模板配置补丁
 type OrderEmailTemplateSettingPatch struct {
-	Templates *OrderEmailTemplatesPatch `json:"templates"`
-	GuestTip  *OrderEmailGuestTipPatch  `json:"guest_tip"`
+	Templates                *OrderEmailTemplatesPatch                `json:"templates"`
+	GuestTip                 *OrderEmailGuestTipPatch                 `json:"guest_tip"`
+	FulfillmentAttachmentTip *OrderEmailFulfillmentAttachmentTipPatch `json:"fulfillment_attachment_tip"`
 }
 
 // --- 默认值 ---
@@ -161,6 +177,11 @@ func OrderEmailTemplateDefaultSetting() OrderEmailTemplateSetting {
 			ZHTW: "遊客訂單可使用下單信箱與訂單密碼在網站查詢訂單詳情。",
 			ENUS: "Guest orders can be queried on the site using the checkout email and order password.",
 		},
+		FulfillmentAttachmentTip: OrderEmailFulfillmentAttachmentTip{
+			ZHCN: "交付内容较多，已作为附件发送，请查看邮件附件获取完整交付内容。",
+			ZHTW: "交付內容較多，已作為附件發送，請查看郵件附件獲取完整交付內容。",
+			ENUS: "The delivery content is included as an attachment. Please check the email attachment for the full content.",
+		},
 	}
 }
 
@@ -176,6 +197,9 @@ func NormalizeOrderEmailTemplateSetting(setting OrderEmailTemplateSetting) Order
 	setting.GuestTip.ZHCN = strings.TrimSpace(setting.GuestTip.ZHCN)
 	setting.GuestTip.ZHTW = strings.TrimSpace(setting.GuestTip.ZHTW)
 	setting.GuestTip.ENUS = strings.TrimSpace(setting.GuestTip.ENUS)
+	setting.FulfillmentAttachmentTip.ZHCN = strings.TrimSpace(setting.FulfillmentAttachmentTip.ZHCN)
+	setting.FulfillmentAttachmentTip.ZHTW = strings.TrimSpace(setting.FulfillmentAttachmentTip.ZHTW)
+	setting.FulfillmentAttachmentTip.ENUS = strings.TrimSpace(setting.FulfillmentAttachmentTip.ENUS)
 	return setting
 }
 
@@ -226,6 +250,11 @@ func OrderEmailTemplateSettingToMap(setting OrderEmailTemplateSetting) map[strin
 			constants.LocaleZhCN: normalized.GuestTip.ZHCN,
 			constants.LocaleZhTW: normalized.GuestTip.ZHTW,
 			constants.LocaleEnUS: normalized.GuestTip.ENUS,
+		},
+		"fulfillment_attachment_tip": map[string]interface{}{
+			constants.LocaleZhCN: normalized.FulfillmentAttachmentTip.ZHCN,
+			constants.LocaleZhTW: normalized.FulfillmentAttachmentTip.ZHTW,
+			constants.LocaleEnUS: normalized.FulfillmentAttachmentTip.ENUS,
 		},
 	}
 }
@@ -305,6 +334,17 @@ func (s *SettingService) PatchOrderEmailTemplateSetting(patch OrderEmailTemplate
 			next.GuestTip.ENUS = strings.TrimSpace(*patch.GuestTip.ENUS)
 		}
 	}
+	if patch.FulfillmentAttachmentTip != nil {
+		if patch.FulfillmentAttachmentTip.ZHCN != nil {
+			next.FulfillmentAttachmentTip.ZHCN = strings.TrimSpace(*patch.FulfillmentAttachmentTip.ZHCN)
+		}
+		if patch.FulfillmentAttachmentTip.ZHTW != nil {
+			next.FulfillmentAttachmentTip.ZHTW = strings.TrimSpace(*patch.FulfillmentAttachmentTip.ZHTW)
+		}
+		if patch.FulfillmentAttachmentTip.ENUS != nil {
+			next.FulfillmentAttachmentTip.ENUS = strings.TrimSpace(*patch.FulfillmentAttachmentTip.ENUS)
+		}
+	}
 
 	normalized := NormalizeOrderEmailTemplateSetting(next)
 	if err := ValidateOrderEmailTemplateSetting(normalized); err != nil {
@@ -327,6 +367,18 @@ func ResolveOrderEmailLocaleTemplate(t OrderEmailSceneTemplate, locale string) O
 		return t.ENUS
 	default:
 		return t.ZHCN
+	}
+}
+
+// ResolveOrderEmailFulfillmentAttachmentTip 按 locale 选择交付内容附件提示
+func ResolveOrderEmailFulfillmentAttachmentTip(tip OrderEmailFulfillmentAttachmentTip, locale string) string {
+	switch locale {
+	case constants.LocaleZhTW:
+		return tip.ZHTW
+	case constants.LocaleEnUS:
+		return tip.ENUS
+	default:
+		return tip.ZHCN
 	}
 }
 
@@ -372,6 +424,12 @@ func orderEmailTemplateSettingFromJSON(raw models.JSON, fallback OrderEmailTempl
 		next.GuestTip.ZHCN = readString(guestTipMap, constants.LocaleZhCN, next.GuestTip.ZHCN)
 		next.GuestTip.ZHTW = readString(guestTipMap, constants.LocaleZhTW, next.GuestTip.ZHTW)
 		next.GuestTip.ENUS = readString(guestTipMap, constants.LocaleEnUS, next.GuestTip.ENUS)
+	}
+
+	if attachTipMap := toStringAnyMap(raw["fulfillment_attachment_tip"]); attachTipMap != nil {
+		next.FulfillmentAttachmentTip.ZHCN = readString(attachTipMap, constants.LocaleZhCN, next.FulfillmentAttachmentTip.ZHCN)
+		next.FulfillmentAttachmentTip.ZHTW = readString(attachTipMap, constants.LocaleZhTW, next.FulfillmentAttachmentTip.ZHTW)
+		next.FulfillmentAttachmentTip.ENUS = readString(attachTipMap, constants.LocaleEnUS, next.FulfillmentAttachmentTip.ENUS)
 	}
 
 	return next

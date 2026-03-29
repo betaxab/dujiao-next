@@ -123,12 +123,18 @@ func (c *Consumer) handleOrderStatusEmail(_ context.Context, task *asynq.Task) e
 	}
 	payloadText := buildOrderFulfillmentEmailPayload(order)
 	input := service.OrderStatusEmailInput{
-		OrderNo:         order.OrderNo,
-		Status:          status,
-		Amount:          order.TotalAmount,
-		Currency:        order.Currency,
-		FulfillmentInfo: payloadText,
-		IsGuest:         order.UserID == 0,
+		OrderNo:  order.OrderNo,
+		Status:   status,
+		Amount:   order.TotalAmount,
+		Currency: order.Currency,
+		IsGuest:  order.UserID == 0,
+	}
+	if models.ShouldAttachFulfillmentPayload(payloadText) {
+		// 交付内容过大，正文不放交付内容，以附件形式发送
+		input.AttachmentName = fmt.Sprintf("order_%s_delivery.txt", order.OrderNo)
+		input.AttachmentContent = payloadText
+	} else {
+		input.FulfillmentInfo = payloadText
 	}
 	if err := c.EmailService.SendOrderStatusEmailWithTemplate(receiverEmail, input, locale, tmplSetting); err != nil {
 		switch {

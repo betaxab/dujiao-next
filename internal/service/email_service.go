@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"mime"
 	"net/mail"
@@ -42,17 +43,22 @@ func (s *EmailService) SendVerifyCode(toEmail, code, purpose, locale string) err
 
 // OrderStatusEmailInput 订单状态邮件输入
 type OrderStatusEmailInput struct {
-	OrderNo         string
-	Status          string
-	Amount          models.Money
-	Currency        string
-	FulfillmentInfo string
-	IsGuest         bool
+	OrderNo           string
+	Status            string
+	Amount            models.Money
+	Currency          string
+	FulfillmentInfo   string
+	IsGuest           bool
+	AttachmentName    string // 非空时表示交付内容以附件形式发送
+	AttachmentContent string // 附件内容
 }
 
 // SendOrderStatusEmail 发送订单状态通知
 func (s *EmailService) SendOrderStatusEmail(toEmail string, input OrderStatusEmailInput, locale string) error {
 	subject, body := buildOrderStatusContent(input, locale)
+	if input.AttachmentName != "" && input.AttachmentContent != "" {
+		return s.sendEmailWithAttachment(toEmail, subject, body, input.AttachmentName, input.AttachmentContent)
+	}
 	return s.sendTextEmail(toEmail, subject, body)
 }
 
@@ -62,6 +68,9 @@ func (s *EmailService) SendOrderStatusEmailWithTemplate(toEmail string, input Or
 		return s.SendOrderStatusEmail(toEmail, input, locale)
 	}
 	subject, body := buildOrderStatusContentFromTemplate(input, locale, *tmplSetting)
+	if input.AttachmentName != "" && input.AttachmentContent != "" {
+		return s.sendEmailWithAttachment(toEmail, subject, body, input.AttachmentName, input.AttachmentContent)
+	}
 	return s.sendTextEmail(toEmail, subject, body)
 }
 
@@ -105,6 +114,14 @@ func buildOrderStatusContentFromTemplate(input OrderStatusEmailInput, locale str
 
 	subject := renderTemplate(localeTmpl.Subject, variables)
 	body := renderTemplate(localeTmpl.Body, variables)
+
+	// 交付内容以附件形式发送时追加提示
+	if input.AttachmentName != "" {
+		tip := strings.TrimSpace(ResolveOrderEmailFulfillmentAttachmentTip(tmplSetting.FulfillmentAttachmentTip, normalized))
+		if tip != "" {
+			body = body + "\n\n" + tip
+		}
+	}
 
 	// 游客订单追加提示
 	if input.IsGuest {
@@ -160,6 +177,72 @@ func (s *EmailService) sendTextEmail(toEmail, subject, body string) error {
 		return normalizeEmailSendError(sendMailWithStartTLS(addr, auth, s.cfg.Host, s.cfg.From, []string{toEmail}, []byte(msg)))
 	}
 	return normalizeEmailSendError(sendMailPlain(addr, auth, s.cfg.Host, s.cfg.From, []string{toEmail}, []byte(msg)))
+}
+
+func (s *EmailService) sendEmailWithAttachment(toEmail, subject, body, attachName, attachContent string) error {
+	if telegramidentity.IsPlaceholderEmail(toEmail) {
+		return nil
+	}
+	if s.cfg == nil || !s.cfg.Enabled {
+		return ErrEmailServiceDisabled
+	}
+	if s.cfg.Host == "" || s.cfg.Port == 0 || s.cfg.From == "" {
+		return ErrEmailServiceNotConfigured
+	}
+	if _, err := mail.ParseAddress(toEmail); err != nil {
+		return ErrInvalidEmail
+	}
+
+	from := buildFromAddress(s.cfg.From, s.cfg.FromName)
+	msg := buildEmailMessageWithAttachment(from, toEmail, subject, body, attachName, attachContent)
+
+	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	var auth smtp.Auth
+	if s.cfg.Username != "" || s.cfg.Password != "" {
+		auth = smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
+	}
+
+	if s.cfg.UseSSL {
+		return normalizeEmailSendError(sendMailWithSSL(addr, auth, s.cfg.Host, s.cfg.From, []string{toEmail}, []byte(msg)))
+	}
+	if s.cfg.UseTLS {
+		return normalizeEmailSendError(sendMailWithStartTLS(addr, auth, s.cfg.Host, s.cfg.From, []string{toEmail}, []byte(msg)))
+	}
+	return normalizeEmailSendError(sendMailPlain(addr, auth, s.cfg.Host, s.cfg.From, []string{toEmail}, []byte(msg)))
+}
+
+func buildEmailMessageWithAttachment(from, to, subject, body, attachName, attachContent string) string {
+	boundary := "----=_DujiaoNextBoundary_" + fmt.Sprintf("%d", len(body)+len(attachContent))
+
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	buf.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject)))
+	buf.WriteString("MIME-Version: 1.0\r\n")
+	buf.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary))
+	buf.WriteString("\r\n")
+
+	// 正文部分
+	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+	buf.WriteString("\r\n")
+	buf.WriteString(base64.StdEncoding.EncodeToString([]byte(body)))
+	buf.WriteString("\r\n")
+
+	// 附件部分
+	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	buf.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", mime.QEncoding.Encode("UTF-8", attachName)))
+	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+	buf.WriteString("\r\n")
+	buf.WriteString(base64.StdEncoding.EncodeToString([]byte(attachContent)))
+	buf.WriteString("\r\n")
+
+	// 结束边界
+	buf.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+
+	return buf.String()
 }
 
 func buildVerifyCodeContent(code, purpose, locale string) (string, string) {
@@ -242,20 +325,32 @@ func buildOrderStatusContent(input OrderStatusEmailInput, locale string) (string
 	case constants.OrderStatusDelivered, constants.OrderStatusCompleted:
 		if payload != "" {
 			body := i18n.Sprintf(normalized, "email.order_status.body_delivered", input.OrderNo, statusLabel, amount, currency, payload)
-			return subject, appendGuestTip(normalized, input, body)
+			return subject, appendGuestTip(normalized, input, appendFulfillmentAttachmentTip(normalized, input, body))
 		}
 		body := i18n.Sprintf(normalized, "email.order_status.body_delivered_simple", input.OrderNo, statusLabel, amount, currency)
-		return subject, appendGuestTip(normalized, input, body)
+		return subject, appendGuestTip(normalized, input, appendFulfillmentAttachmentTip(normalized, input, body))
 	case constants.OrderStatusPaid:
 		body := i18n.Sprintf(normalized, "email.order_status.body_paid", input.OrderNo, statusLabel, amount, currency)
-		return subject, appendGuestTip(normalized, input, body)
+		return subject, appendGuestTip(normalized, input, appendFulfillmentAttachmentTip(normalized, input, body))
 	case constants.OrderStatusCanceled:
 		body := i18n.Sprintf(normalized, "email.order_status.body_canceled", input.OrderNo, statusLabel, amount, currency)
-		return subject, appendGuestTip(normalized, input, body)
+		return subject, appendGuestTip(normalized, input, appendFulfillmentAttachmentTip(normalized, input, body))
 	default:
 		body := i18n.Sprintf(normalized, "email.order_status.body", input.OrderNo, statusLabel, amount, currency)
-		return subject, appendGuestTip(normalized, input, body)
+		return subject, appendGuestTip(normalized, input, appendFulfillmentAttachmentTip(normalized, input, body))
 	}
+}
+
+func appendFulfillmentAttachmentTip(locale string, input OrderStatusEmailInput, body string) string {
+	if input.AttachmentName == "" {
+		return body
+	}
+	tipKey := "email.order_status.fulfillment_attachment_tip"
+	tip := i18n.T(locale, tipKey)
+	if tip == tipKey {
+		return body
+	}
+	return body + "\n\n" + tip
 }
 
 func appendGuestTip(locale string, input OrderStatusEmailInput, body string) string {

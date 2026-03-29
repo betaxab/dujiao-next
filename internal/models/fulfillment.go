@@ -7,8 +7,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// FulfillmentPayloadMaxPreviewLines 交付内容截断阈值
+// FulfillmentPayloadMaxPreviewLines 交付内容截断阈值（API 响应）
 const FulfillmentPayloadMaxPreviewLines = 100
+
+// FulfillmentPayloadMaxEmailLines 邮件内嵌交付内容的最大行数，超过则转为附件
+const FulfillmentPayloadMaxEmailLines = 20
+
+// ShouldAttachFulfillmentPayload 判断交付内容是否应以邮件附件形式发送
+func ShouldAttachFulfillmentPayload(payload string) bool {
+	if payload == "" {
+		return false
+	}
+	return len(strings.Split(payload, "\n")) > FulfillmentPayloadMaxEmailLines
+}
 
 // Fulfillment 交付记录表
 type Fulfillment struct {
