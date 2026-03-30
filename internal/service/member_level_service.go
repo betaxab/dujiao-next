@@ -200,7 +200,10 @@ func (s *MemberLevelService) CheckAndUpgrade(userID uint) error {
 	}
 
 	for _, level := range levels {
-		if level.SortOrder <= currentSortOrder {
+		if level.SortOrder < currentSortOrder {
+			continue
+		}
+		if level.ID == user.MemberLevelID {
 			continue
 		}
 		if s.meetsThreshold(user, &level) {

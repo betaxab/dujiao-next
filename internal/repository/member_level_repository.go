@@ -82,7 +82,7 @@ func (r *GormMemberLevelRepository) GetDefault() (*models.MemberLevel, error) {
 // ListAllActive 获取所有启用的等级，按 sort_order DESC
 func (r *GormMemberLevelRepository) ListAllActive() ([]models.MemberLevel, error) {
 	var levels []models.MemberLevel
-	if err := r.db.Where("is_active = ?", true).Order("sort_order desc").Find(&levels).Error; err != nil {
+	if err := r.db.Where("is_active = ?", true).Order("sort_order desc, id desc").Find(&levels).Error; err != nil {
 		return nil, err
 	}
 	return levels, nil
