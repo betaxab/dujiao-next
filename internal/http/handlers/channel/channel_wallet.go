@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dujiao-next/internal/constants"
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/logger"
 	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/repository"
@@ -161,12 +162,7 @@ func (h *Handler) RedeemGiftCard(c *gin.Context) {
 		return
 	}
 
-	respondChannelSuccess(c, gin.H{
-		"gift_card":    card,
-		"wallet":       account,
-		"transaction":  txn,
-		"wallet_delta": card.Amount,
-	})
+	respondChannelSuccess(c, dto.NewGiftCardRedeemResp(card, account, txn))
 }
 
 // CreateWalletRecharge POST /api/v1/channel/wallet/recharge

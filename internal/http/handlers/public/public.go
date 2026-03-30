@@ -8,6 +8,7 @@ import (
 
 	"github.com/dujiao-next/internal/cache"
 	"github.com/dujiao-next/internal/constants"
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/i18n"
@@ -24,45 +25,76 @@ const (
 	publicLowStockLimit  = 5
 )
 
-// PublicSKUView 公共 SKU 响应结构，在原始 SKU 基础上附加促销价
-type PublicSKUView struct {
+// publicSKUView 内部 SKU 计算结构，用于装饰逻辑
+type publicSKUView struct {
 	models.ProductSKU
-	CostPriceAmount      *models.Money `json:"cost_price_amount,omitempty"` // 遮蔽嵌入字段，前台不暴露成本价
-	PromotionPriceAmount *models.Money `json:"promotion_price_amount,omitempty"`
-	MemberPriceAmount    *models.Money `json:"member_price_amount,omitempty"`
+	PromotionPriceAmount *models.Money
+	MemberPriceAmount    *models.Money
 }
 
-// MemberLevelPriceView 会员等级价格视图
-type MemberLevelPriceView struct {
-	MemberLevelID uint         `json:"member_level_id"`
-	SKUID         uint         `json:"sku_id"`
-	PriceAmount   models.Money `json:"price_amount"`
-}
-
-// PromotionRuleView 活动规则展示结构
-type PromotionRuleView struct {
-	ID        uint         `json:"id"`
-	Name      string       `json:"name"`
-	Type      string       `json:"type"`
-	Value     models.Money `json:"value"`
-	MinAmount models.Money `json:"min_amount"`
-}
-
-// PublicProductView 公共商品响应结构
-type PublicProductView struct {
+// publicProductView 内部商品计算结构，装饰完成后转换为 dto.ProductResp
+type publicProductView struct {
 	models.Product
-	CostPriceAmount      *struct{}              `json:"cost_price_amount,omitempty"` // 遮蔽嵌入字段，前台不暴露成本价
-	PromotionID          *uint                  `json:"promotion_id,omitempty"`
-	PromotionName        string                 `json:"promotion_name,omitempty"`
-	PromotionType        string                 `json:"promotion_type,omitempty"`
-	PromotionPriceAmount *models.Money          `json:"promotion_price_amount,omitempty"`
-	PromotionRules       []PromotionRuleView    `json:"promotion_rules,omitempty"`
-	MemberPrices         []MemberLevelPriceView `json:"member_prices,omitempty"`
-	PublicSKUs           *[]PublicSKUView       `json:"skus,omitempty"`
-	ManualStockAvailable int                    `json:"manual_stock_available"`
-	AutoStockAvailable   int64                  `json:"auto_stock_available"`
-	StockStatus          string                 `json:"stock_status"`
-	IsSoldOut            bool                   `json:"is_sold_out"`
+	PromotionID          *uint
+	PromotionName        string
+	PromotionType        string
+	PromotionPriceAmount *models.Money
+	PromotionRules       []dto.PromotionRuleResp
+	MemberPrices         []dto.MemberLevelPrice
+	PublicSKUs           []publicSKUView
+	ManualStockAvailable int
+	AutoStockAvailable   int64
+	StockStatus          string
+	IsSoldOut            bool
+}
+
+// toProductResp 将内部计算结构转换为公共 DTO
+func (v *publicProductView) toProductResp() dto.ProductResp {
+	skus := make([]dto.SKUResp, 0, len(v.PublicSKUs))
+	for _, sv := range v.PublicSKUs {
+		skus = append(skus, dto.SKUResp{
+			ID:                   sv.ID,
+			SKUCode:              sv.SKUCode,
+			SpecValues:           sv.SpecValuesJSON,
+			PriceAmount:          sv.PriceAmount,
+			ManualStockTotal:     sv.ManualStockTotal,
+			ManualStockSold:      sv.ManualStockSold,
+			AutoStockAvailable:   sv.AutoStockAvailable,
+			UpstreamStock:        sv.UpstreamStock,
+			IsActive:             sv.IsActive,
+			PromotionPriceAmount: sv.PromotionPriceAmount,
+			MemberPriceAmount:    sv.MemberPriceAmount,
+		})
+	}
+
+	resp := dto.ProductResp{
+		ID:                   v.Product.ID,
+		CategoryID:           v.Product.CategoryID,
+		Slug:                 v.Product.Slug,
+		Title:                v.Product.TitleJSON,
+		Description:          v.Product.DescriptionJSON,
+		Content:              v.Product.ContentJSON,
+		PriceAmount:          v.Product.PriceAmount,
+		Images:               v.Product.Images,
+		Tags:                 v.Product.Tags,
+		PurchaseType:         v.Product.PurchaseType,
+		MaxPurchaseQuantity:  v.Product.MaxPurchaseQuantity,
+		FulfillmentType:      v.Product.FulfillmentType,
+		ManualFormSchema:     v.Product.ManualFormSchemaJSON,
+		ManualStockAvailable: v.ManualStockAvailable,
+		AutoStockAvailable:   v.AutoStockAvailable,
+		StockStatus:          v.StockStatus,
+		IsSoldOut:            v.IsSoldOut,
+		Category:             dto.NewCategoryResp(&v.Product.Category),
+		SKUs:                 skus,
+		PromotionID:          v.PromotionID,
+		PromotionName:        v.PromotionName,
+		PromotionType:        v.PromotionType,
+		PromotionPriceAmount: v.PromotionPriceAmount,
+		PromotionRules:       v.PromotionRules,
+		MemberPrices:         v.MemberPrices,
+	}
+	return resp
 }
 
 // GetConfig 获取全局配置
@@ -177,21 +209,9 @@ func (h *Handler) GetPublicMemberLevels(c *gin.Context) {
 		return
 	}
 
-	type PublicMemberLevelView struct {
-		ID                uint        `json:"id"`
-		Name              models.JSON `json:"name"`
-		Slug              string      `json:"slug"`
-		Icon              string      `json:"icon"`
-		DiscountRate      float64     `json:"discount_rate"`
-		RechargeThreshold float64     `json:"recharge_threshold"`
-		SpendThreshold    float64     `json:"spend_threshold"`
-		IsDefault         bool        `json:"is_default"`
-		SortOrder         int         `json:"sort_order"`
-	}
-
-	views := make([]PublicMemberLevelView, 0, len(levels))
+	views := make([]dto.MemberLevelResp, 0, len(levels))
 	for _, l := range levels {
-		views = append(views, PublicMemberLevelView{
+		views = append(views, dto.MemberLevelResp{
 			ID:                l.ID,
 			Name:              l.NameJSON,
 			Slug:              l.Slug,
@@ -233,7 +253,7 @@ func (h *Handler) GetProducts(c *gin.Context) {
 		return
 	}
 
-	decorated := make([]PublicProductView, 0, len(products))
+	decorated := make([]dto.ProductResp, 0, len(products))
 	for i := range products {
 		item, derr := h.decoratePublicProduct(&products[i], promotionService)
 		if derr != nil {
@@ -283,12 +303,12 @@ func (h *Handler) GetProductBySlug(c *gin.Context) {
 	response.Success(c, decorated)
 }
 
-func (h *Handler) decoratePublicProduct(product *models.Product, promotionService *service.PromotionService, userMemberLevelID ...uint) (PublicProductView, error) {
+func (h *Handler) decoratePublicProduct(product *models.Product, promotionService *service.PromotionService, userMemberLevelID ...uint) (dto.ProductResp, error) {
 	if product == nil {
-		return PublicProductView{}, nil
+		return dto.ProductResp{}, nil
 	}
 
-	item := PublicProductView{Product: *product}
+	item := publicProductView{Product: *product}
 	displayPrice := resolvePublicDisplayPrice(product)
 	displaySKUID := resolvePublicDisplaySKUID(product)
 	item.Product.PriceAmount = displayPrice
@@ -298,9 +318,9 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 	if promotionService != nil {
 		allRules, err := promotionService.GetProductPromotions(product.ID)
 		if err == nil && len(allRules) > 0 {
-			rules := make([]PromotionRuleView, 0, len(allRules))
+			rules := make([]dto.PromotionRuleResp, 0, len(allRules))
 			for _, r := range allRules {
-				rules = append(rules, PromotionRuleView{
+				rules = append(rules, dto.PromotionRuleResp{
 					ID:        r.ID,
 					Name:      strings.TrimSpace(r.Name),
 					Type:      strings.TrimSpace(r.Type),
@@ -320,9 +340,9 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 	if h.Container != nil && h.MemberLevelService != nil {
 		levelPrices, _ := h.MemberLevelService.GetLevelPricesByProduct(product.ID)
 		if len(levelPrices) > 0 {
-			views := make([]MemberLevelPriceView, 0, len(levelPrices))
+			views := make([]dto.MemberLevelPrice, 0, len(levelPrices))
 			for _, lp := range levelPrices {
-				views = append(views, MemberLevelPriceView{
+				views = append(views, dto.MemberLevelPrice{
 					MemberLevelID: lp.MemberLevelID,
 					SKUID:         lp.SKUID,
 					PriceAmount:   lp.PriceAmount,
@@ -332,14 +352,13 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 		}
 	}
 
-	// 构建 PublicSKUs 并为每个 active SKU 计算促销价
-	// 使用 item.Product.SKUs（decorateProductStock 可能已修改库存字段）
-	skuViews := make([]PublicSKUView, 0, len(item.Product.SKUs))
+	// 构建 SKU 列表并为每个 active SKU 计算促销价
+	skuViews := make([]publicSKUView, 0, len(item.Product.SKUs))
 	var displayPromotion *models.Promotion
 	var displayPromotionPrice *models.Money
 
 	for _, sku := range item.Product.SKUs {
-		sv := PublicSKUView{ProductSKU: sku}
+		sv := publicSKUView{ProductSKU: sku}
 
 		// 计算当前用户的会员价
 		if memberLevelID > 0 && h.Container != nil && h.MemberLevelService != nil && sku.IsActive {
@@ -355,7 +374,7 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 			priceCarrier.PriceAmount = sku.PriceAmount
 			promotion, discountedPrice, err := promotionService.ApplyPromotion(&priceCarrier, 1)
 			if err != nil && !errors.Is(err, service.ErrPromotionInvalid) {
-				return PublicProductView{}, err
+				return dto.ProductResp{}, err
 			}
 			if promotion != nil && discountedPrice.Decimal.LessThan(sku.PriceAmount.Decimal) {
 				sv.PromotionPriceAmount = &discountedPrice
@@ -369,9 +388,7 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 		skuViews = append(skuViews, sv)
 	}
 
-	item.PublicSKUs = &skuViews
-	// 隐藏嵌入 Product 中的原始 SKUs，由 PublicSKUs 代替输出
-	item.Product.SKUs = nil
+	item.PublicSKUs = skuViews
 
 	// 产品级促销信息与展示价保持同一口径，避免列表价与活动价来自不同 SKU。
 	if displayPromotion != nil && displayPromotionPrice != nil {
@@ -382,7 +399,7 @@ func (h *Handler) decoratePublicProduct(product *models.Product, promotionServic
 		item.PromotionPriceAmount = displayPromotionPrice
 	}
 
-	return item, nil
+	return item.toProductResp(), nil
 }
 
 func resolvePublicDisplayPrice(product *models.Product) models.Money {
@@ -411,7 +428,7 @@ func resolvePublicDisplaySKUID(product *models.Product) uint {
 	return 0
 }
 
-func (h *Handler) decorateProductStock(product *models.Product, item *PublicProductView) {
+func (h *Handler) decorateProductStock(product *models.Product, item *publicProductView) {
 	if product == nil || item == nil {
 		return
 	}
@@ -518,7 +535,7 @@ func (h *Handler) decorateProductStock(product *models.Product, item *PublicProd
 }
 
 // decorateUpstreamStock 根据 SKU 映射的上游库存信息填充商品及 SKU 级库存状态
-func (h *Handler) decorateUpstreamStock(product *models.Product, item *PublicProductView) {
+func (h *Handler) decorateUpstreamStock(product *models.Product, item *publicProductView) {
 	// 通过本地商品 ID 查找 product mapping
 	mapping, err := h.ProductMappingRepo.GetByLocalProductID(product.ID)
 	if err != nil || mapping == nil {
@@ -639,7 +656,7 @@ func (h *Handler) GetPosts(c *gin.Context) {
 
 	// 统一响应格式
 	pagination := response.BuildPagination(page, pageSize, total)
-	response.SuccessWithPage(c, posts, pagination)
+	response.SuccessWithPage(c, dto.NewPostRespList(posts), pagination)
 }
 
 // GetPostBySlug 根据 slug 获取文章详情
@@ -656,7 +673,7 @@ func (h *Handler) GetPostBySlug(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, post)
+	response.Success(c, dto.NewPostResp(post))
 }
 
 // GetCategories 获取分类列表
@@ -667,7 +684,7 @@ func (h *Handler) GetCategories(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, categories)
+	response.Success(c, dto.NewCategoryRespList(categories))
 }
 
 // CreateGuestOrderRequest 游客下单请求
@@ -731,9 +748,7 @@ func (h *Handler) CreateGuestOrder(c *gin.Context) {
 		respondGuestOrderCreateError(c, err)
 		return
 	}
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetail(order))
 }
 
 // CreateGuestOrderAndPayRequest 游客创建订单并发起支付请求
@@ -798,13 +813,12 @@ func (h *Handler) CreateGuestOrderAndPay(c *gin.Context) {
 		respondGuestOrderCreateError(c, err)
 		return
 	}
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
+	orderResp := dto.NewOrderDetail(order)
 
 	// 如果未指定支付渠道，仅返回订单
 	if req.ChannelID == 0 {
 		response.Success(c, gin.H{
-			"order":    order,
+			"order":    orderResp,
 			"order_no": order.OrderNo,
 		})
 		return
@@ -819,7 +833,7 @@ func (h *Handler) CreateGuestOrderAndPay(c *gin.Context) {
 	})
 	if err != nil {
 		resp := gin.H{
-			"order":         order,
+			"order":         orderResp,
 			"order_no":      order.OrderNo,
 			"payment_error": err.Error(),
 		}
@@ -828,7 +842,7 @@ func (h *Handler) CreateGuestOrderAndPay(c *gin.Context) {
 	}
 
 	resp := gin.H{
-		"order":              order,
+		"order":              orderResp,
 		"order_no":           order.OrderNo,
 		"order_paid":         result.OrderPaid,
 		"wallet_paid_amount": result.WalletPaidAmount,
@@ -910,15 +924,13 @@ func (h *Handler) ListGuestOrders(c *gin.Context) {
 			shared.RespondError(c, response.CodeInternal, "error.order_fetch_failed", err)
 			return
 		}
-		order.MaskUpstreamFulfillmentType()
-		order.StripCostPrice()
 		pagination := response.Pagination{
 			Page:      1,
 			PageSize:  1,
 			Total:     1,
 			TotalPage: 1,
 		}
-		response.SuccessWithPage(c, []models.Order{*order}, pagination)
+		response.SuccessWithPage(c, dto.NewOrderSummaryList([]models.Order{*order}), pagination)
 		return
 	}
 
@@ -931,12 +943,8 @@ func (h *Handler) ListGuestOrders(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.order_fetch_failed", err)
 		return
 	}
-	for i := range orders {
-		orders[i].MaskUpstreamFulfillmentType()
-		orders[i].StripCostPrice()
-	}
 	pagination := response.BuildPagination(page, pageSize, total)
-	response.SuccessWithPage(c, orders, pagination)
+	response.SuccessWithPage(c, dto.NewOrderSummaryList(orders), pagination)
 }
 
 // GetGuestOrder 获取游客订单详情
@@ -965,9 +973,7 @@ func (h *Handler) GetGuestOrder(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.order_fetch_failed", err)
 		return
 	}
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetailTruncated(order))
 }
 
 // GetGuestOrderByOrderNo 按订单号获取游客订单详情
@@ -996,10 +1002,7 @@ func (h *Handler) GetGuestOrderByOrderNo(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.order_fetch_failed", err)
 		return
 	}
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	order.TruncateFulfillmentPayload()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetailTruncated(order))
 }
 
 // DownloadGuestFulfillment 下载订单交付内容（游客）

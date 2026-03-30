@@ -3,6 +3,7 @@ package public
 import (
 	"strconv"
 
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 
@@ -26,5 +27,5 @@ func (h *Handler) GetPublicBanners(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, banners)
+	response.Success(c, dto.NewBannerRespList(banners))
 }

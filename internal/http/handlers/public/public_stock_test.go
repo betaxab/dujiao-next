@@ -34,7 +34,7 @@ func TestDecorateProductStock_AutoSkipsInactiveSKUs(t *testing.T) {
 		},
 	}
 
-	item := PublicProductView{Product: *product}
+	item := publicProductView{Product: *product}
 	h.decorateProductStock(product, &item)
 
 	if item.AutoStockAvailable != 2 {

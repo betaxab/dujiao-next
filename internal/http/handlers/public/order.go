@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/models"
@@ -108,9 +109,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetail(order))
 }
 
 // CreateOrderAndPayRequest 创建订单并发起支付请求
@@ -161,13 +160,12 @@ func (h *Handler) CreateOrderAndPay(c *gin.Context) {
 		return
 	}
 
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
+	orderResp := dto.NewOrderDetail(order)
 
 	// 如果未指定支付渠道且未使用余额，仅返回订单
 	if req.ChannelID == 0 && !req.UseBalance {
 		response.Success(c, gin.H{
-			"order":    order,
+			"order":    orderResp,
 			"order_no": order.OrderNo,
 		})
 		return
@@ -181,9 +179,8 @@ func (h *Handler) CreateOrderAndPay(c *gin.Context) {
 		Context:    c.Request.Context(),
 	})
 	if err != nil {
-		// 订单已创建但支付失败，返回订单信息和错误
 		resp := gin.H{
-			"order":         order,
+			"order":         orderResp,
 			"order_no":      order.OrderNo,
 			"payment_error": err.Error(),
 		}
@@ -192,7 +189,7 @@ func (h *Handler) CreateOrderAndPay(c *gin.Context) {
 	}
 
 	resp := gin.H{
-		"order":              order,
+		"order":              orderResp,
 		"order_no":           order.OrderNo,
 		"order_paid":         result.OrderPaid,
 		"wallet_paid_amount": result.WalletPaidAmount,
@@ -236,12 +233,8 @@ func (h *Handler) ListOrders(c *gin.Context) {
 		return
 	}
 
-	for i := range orders {
-		orders[i].MaskUpstreamFulfillmentType()
-		orders[i].StripCostPrice()
-	}
 	pagination := response.BuildPagination(page, pageSize, total)
-	response.SuccessWithPage(c, orders, pagination)
+	response.SuccessWithPage(c, dto.NewOrderSummaryList(orders), pagination)
 }
 
 // GetOrder 获取订单详情
@@ -267,10 +260,7 @@ func (h *Handler) GetOrder(c *gin.Context) {
 		return
 	}
 
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	order.TruncateFulfillmentPayload()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetailTruncated(order))
 }
 
 // GetOrderByOrderNo 按订单号获取订单详情
@@ -296,10 +286,7 @@ func (h *Handler) GetOrderByOrderNo(c *gin.Context) {
 		return
 	}
 
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	order.TruncateFulfillmentPayload()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetailTruncated(order))
 }
 
 // CancelOrder 用户取消订单
@@ -328,9 +315,7 @@ func (h *Handler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	order.MaskUpstreamFulfillmentType()
-	order.StripCostPrice()
-	response.Success(c, order)
+	response.Success(c, dto.NewOrderDetail(order))
 }
 
 // DownloadFulfillment 下载订单交付内容（登录用户）

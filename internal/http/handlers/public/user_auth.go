@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/dujiao-next/internal/constants"
-
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/i18n"
@@ -165,12 +165,7 @@ func (h *Handler) UserRegister(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"user": gin.H{
-			"id":                user.ID,
-			"email":             user.Email,
-			"nickname":          user.DisplayName,
-			"email_verified_at": user.EmailVerifiedAt,
-		},
+		"user":       dto.NewUserAuthBriefResp(user),
 		"token":      token,
 		"expires_at": expiresAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
@@ -240,12 +235,7 @@ func (h *Handler) UserLogin(c *gin.Context) {
 
 	h.recordUserLogin(c, user.Email, user.ID, constants.LoginLogStatusSuccess, "", constants.LoginLogSourceWeb)
 	response.Success(c, gin.H{
-		"user": gin.H{
-			"id":                user.ID,
-			"email":             user.Email,
-			"nickname":          user.DisplayName,
-			"email_verified_at": user.EmailVerifiedAt,
-		},
+		"user":       dto.NewUserAuthBriefResp(user),
 		"token":      token,
 		"expires_at": expiresAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
@@ -342,12 +332,7 @@ func (h *Handler) UserTelegramLogin(c *gin.Context) {
 
 	h.recordUserLogin(c, user.Email, user.ID, constants.LoginLogStatusSuccess, "", constants.LoginLogSourceTelegram)
 	response.Success(c, gin.H{
-		"user": gin.H{
-			"id":                user.ID,
-			"email":             user.Email,
-			"nickname":          user.DisplayName,
-			"email_verified_at": user.EmailVerifiedAt,
-		},
+		"user":       dto.NewUserAuthBriefResp(user),
 		"token":      token,
 		"expires_at": expiresAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
@@ -401,12 +386,7 @@ func (h *Handler) UserTelegramMiniAppLogin(c *gin.Context) {
 
 	h.recordUserLogin(c, user.Email, user.ID, constants.LoginLogStatusSuccess, "", constants.LoginLogSourceTelegram)
 	response.Success(c, gin.H{
-		"user": gin.H{
-			"id":                user.ID,
-			"email":             user.Email,
-			"nickname":          user.DisplayName,
-			"email_verified_at": user.EmailVerifiedAt,
-		},
+		"user":       dto.NewUserAuthBriefResp(user),
 		"token":      token,
 		"expires_at": expiresAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
@@ -645,16 +625,16 @@ func (h *Handler) UnbindMyTelegram(c *gin.Context) {
 	response.Success(c, gin.H{"unbound": true})
 }
 
-func (h *Handler) userProfileResponse(user *models.User) (gin.H, error) {
+func (h *Handler) userProfileResponse(user *models.User) (dto.UserProfileResp, error) {
 	emailMode, err := h.UserAuthService.ResolveEmailChangeMode(user)
 	if err != nil {
-		return nil, err
+		return dto.UserProfileResp{}, err
 	}
 	passwordMode, err := h.UserAuthService.ResolvePasswordChangeMode(user)
 	if err != nil {
-		return nil, err
+		return dto.UserProfileResp{}, err
 	}
-	return shared.BuildUserProfilePayload(user, emailMode, passwordMode), nil
+	return dto.NewUserProfileResp(user, emailMode, passwordMode), nil
 }
 
 // UserProfileUpdateRequest 更新资料请求

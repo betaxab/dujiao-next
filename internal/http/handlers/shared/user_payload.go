@@ -21,22 +21,3 @@ func BuildTelegramBindingResponse(identity *models.UserOAuthIdentity) gin.H {
 		"updated_at":       identity.UpdatedAt,
 	}
 }
-
-// BuildUserProfilePayload 构造用户资料响应载荷。
-func BuildUserProfilePayload(user *models.User, emailMode, passwordMode string) gin.H {
-	if user == nil {
-		return gin.H{}
-	}
-	return gin.H{
-		"id":                   user.ID,
-		"email":                user.Email,
-		"nickname":             user.DisplayName,
-		"email_verified_at":    user.EmailVerifiedAt,
-		"locale":               user.Locale,
-		"member_level_id":      user.MemberLevelID,
-		"total_recharged":      user.TotalRecharged,
-		"total_spent":          user.TotalSpent,
-		"email_change_mode":    emailMode,
-		"password_change_mode": passwordMode,
-	}
-}

@@ -48,39 +48,6 @@ func TestBuildChannelIdentityResponse(t *testing.T) {
 	}
 }
 
-func TestBuildWalletRechargePaymentPayload(t *testing.T) {
-	expiresAt := time.Now().UTC()
-	recharge := &models.WalletRechargeOrder{
-		RechargeNo: "RCG-001",
-		Status:     "success",
-	}
-	payment := &models.Payment{
-		ID:              9,
-		ProviderType:    "epusdt",
-		ChannelType:     "telegram_bot",
-		InteractionMode: "redirect",
-		PayURL:          "https://pay.example.com",
-		QRCode:          "qr-code-data",
-		ExpiredAt:       &expiresAt,
-		Status:          "pending",
-	}
-	account := &models.WalletAccount{UserID: 7}
-
-	payload := BuildWalletRechargePaymentPayload(recharge, payment, account)
-	if payload["payment_id"] != uint(9) {
-		t.Fatalf("payment id mismatch: %#v", payload["payment_id"])
-	}
-	if payload["recharge_no"] != "RCG-001" {
-		t.Fatalf("recharge no mismatch: %#v", payload["recharge_no"])
-	}
-	if payload["provider_type"] != "epusdt" {
-		t.Fatalf("provider type mismatch: %#v", payload["provider_type"])
-	}
-	if payload["account"] != account {
-		t.Fatalf("account payload mismatch: %#v", payload["account"])
-	}
-}
-
 func TestBuildTelegramBindingResponse(t *testing.T) {
 	if payload := BuildTelegramBindingResponse(nil); payload["bound"] != false {
 		t.Fatalf("nil identity should be unbound: %#v", payload)
@@ -99,24 +66,5 @@ func TestBuildTelegramBindingResponse(t *testing.T) {
 	}
 	if payload["provider_user_id"] != "9988" {
 		t.Fatalf("provider user id mismatch: %#v", payload["provider_user_id"])
-	}
-}
-
-func TestBuildUserProfilePayload(t *testing.T) {
-	user := &models.User{
-		ID:          3,
-		Email:       "buyer@example.com",
-		DisplayName: "Buyer",
-		Locale:      "en-US",
-	}
-	payload := BuildUserProfilePayload(user, "bind_only", "set_without_old")
-	if payload["email"] != "buyer@example.com" {
-		t.Fatalf("email mismatch: %#v", payload["email"])
-	}
-	if payload["email_change_mode"] != "bind_only" {
-		t.Fatalf("email mode mismatch: %#v", payload["email_change_mode"])
-	}
-	if payload["password_change_mode"] != "set_without_old" {
-		t.Fatalf("password mode mismatch: %#v", payload["password_change_mode"])
 	}
 }

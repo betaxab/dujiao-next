@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dujiao-next/internal/constants"
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/models"
@@ -35,7 +36,7 @@ func (h *Handler) GetMyWallet(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	response.Success(c, account)
+	response.Success(c, dto.NewWalletAccountResp(account))
 }
 
 // GetMyWalletTransactions 获取当前用户钱包流水
@@ -59,7 +60,7 @@ func (h *Handler) GetMyWalletTransactions(c *gin.Context) {
 	}
 
 	pagination := response.BuildPagination(page, pageSize, total)
-	response.SuccessWithPage(c, transactions, pagination)
+	response.SuccessWithPage(c, dto.NewWalletTransactionRespList(transactions), pagination)
 }
 
 // RechargeWallet 用户充值钱包余额
@@ -110,7 +111,7 @@ func (h *Handler) RechargeWallet(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	response.Success(c, shared.BuildWalletRechargePaymentPayload(result.Recharge, result.Payment, account))
+	response.Success(c, dto.NewWalletRechargePaymentPayload(result.Recharge, result.Payment, account))
 }
 
 // GetMyWalletRecharge 获取当前用户充值单详情
@@ -144,7 +145,7 @@ func (h *Handler) GetMyWalletRecharge(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	response.Success(c, shared.BuildWalletRechargePaymentPayload(recharge, payment, account))
+	response.Success(c, dto.NewWalletRechargePaymentPayload(recharge, payment, account))
 }
 
 // CaptureMyWalletRechargePayment 主动检查当前用户充值支付状态
@@ -194,5 +195,5 @@ func (h *Handler) CaptureMyWalletRechargePayment(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	response.Success(c, shared.BuildWalletRechargePaymentPayload(updatedRecharge, updatedPayment, account))
+	response.Success(c, dto.NewWalletRechargePaymentPayload(updatedRecharge, updatedPayment, account))
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/service"
@@ -68,7 +69,7 @@ func (h *Handler) OpenAffiliate(c *gin.Context) {
 		}
 		return
 	}
-	response.Success(c, profile)
+	response.Success(c, dto.NewAffiliateProfileResp(profile))
 }
 
 // GetAffiliateDashboard 获取推广返利看板
@@ -109,7 +110,7 @@ func (h *Handler) ListAffiliateCommissions(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	response.SuccessWithPage(c, rows, response.BuildPagination(page, pageSize, total))
+	response.SuccessWithPage(c, dto.NewAffiliateCommissionRespList(rows), response.BuildPagination(page, pageSize, total))
 }
 
 // ListAffiliateWithdraws 查询我的提现申请记录
@@ -132,7 +133,7 @@ func (h *Handler) ListAffiliateWithdraws(c *gin.Context) {
 		shared.RespondError(c, response.CodeInternal, "error.user_fetch_failed", err)
 		return
 	}
-	response.SuccessWithPage(c, rows, response.BuildPagination(page, pageSize, total))
+	response.SuccessWithPage(c, dto.NewAffiliateWithdrawRespList(rows), response.BuildPagination(page, pageSize, total))
 }
 
 // AffiliateWithdrawApplyRequest 提现申请请求
@@ -186,5 +187,5 @@ func (h *Handler) ApplyAffiliateWithdraw(c *gin.Context) {
 		}
 		return
 	}
-	response.Success(c, row)
+	response.Success(c, dto.NewAffiliateWithdrawResp(row))
 }

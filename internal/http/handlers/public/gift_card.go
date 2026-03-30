@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dujiao-next/internal/constants"
+	"github.com/dujiao-next/internal/dto"
 	"github.com/dujiao-next/internal/http/handlers/shared"
 	"github.com/dujiao-next/internal/http/response"
 	"github.com/dujiao-next/internal/service"
@@ -71,10 +72,5 @@ func (h *Handler) RedeemGiftCard(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"gift_card":    card,
-		"wallet":       account,
-		"transaction":  txn,
-		"wallet_delta": card.Amount,
-	})
+	response.Success(c, dto.NewGiftCardRedeemResp(card, account, txn))
 }
