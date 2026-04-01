@@ -49,6 +49,10 @@ func (s dashboardServiceRepoStub) GetTopChannels(startAt, endAt time.Time, limit
 	return []repository.DashboardChannelRankingRow{}, nil
 }
 
+func (s dashboardServiceRepoStub) GetTotalUserBalance() (float64, error) {
+	return 0, nil
+}
+
 func TestDashboardOverviewUsesPaidOrdersForPaymentConversionRate(t *testing.T) {
 	service := NewDashboardService(dashboardServiceRepoStub{
 		overview: repository.DashboardOverviewRow{

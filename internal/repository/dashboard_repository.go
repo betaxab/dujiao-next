@@ -2,7 +2,6 @@ package repository
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -139,13 +138,6 @@ func onlinePaymentBase(db *gorm.DB, startAt, endAt time.Time) *gorm.DB {
 		Where("created_at >= ? AND created_at < ? AND provider_type <> ?", startAt, endAt, constants.PaymentProviderWallet)
 }
 
-func dashboardDayKey(value time.Time, location *time.Location) string {
-	if location == nil {
-		location = time.UTC
-	}
-	return value.In(location).Format("2006-01-02")
-}
-
 func resolveDashboardManualAvailableStock(product models.Product) (int64, bool) {
 	activeSKUs := activeProductSKUs(product.SKUs)
 	if len(activeSKUs) == 0 {
@@ -177,54 +169,66 @@ func resolveDashboardManualAvailableStock(product models.Product) (int64, bool) 
 func (r *GormDashboardRepository) GetOverview(startAt, endAt time.Time) (DashboardOverviewRow, error) {
 	result := DashboardOverviewRow{}
 
-	orderBase := func() *gorm.DB {
-		return r.db.Model(&models.Order{}).
-			Where("parent_id IS NULL AND created_at >= ? AND created_at < ?", startAt, endAt)
-	}
-
-	if err := orderBase().Count(&result.OrdersTotal).Error; err != nil {
-		return result, err
-	}
-
-	paidStatuses := paidOrderStatuses()
-	if err := orderBase().Where("status IN ?", paidStatuses).Count(&result.PaidOrders).Error; err != nil {
-		return result, err
-	}
-	if err := orderBase().Where("status = ?", constants.OrderStatusCompleted).Count(&result.CompletedOrders).Error; err != nil {
-		return result, err
-	}
-	if err := orderBase().Where("status = ?", constants.OrderStatusPendingPayment).Count(&result.PendingPaymentOrders).Error; err != nil {
-		return result, err
-	}
+	// 订单聚合：将 6 个串行 COUNT/SUM 查询合并为 1 个
+	paidIn := quotedStatusList(paidOrderStatuses())
 	processingStatuses := []string{
 		constants.OrderStatusPaid,
 		constants.OrderStatusFulfilling,
 		constants.OrderStatusPartiallyDelivered,
 		constants.OrderStatusDelivered,
 	}
-	if err := orderBase().Where("status IN ?", processingStatuses).Count(&result.ProcessingOrders).Error; err != nil {
-		return result, err
+	processingIn := quotedStatusList(processingStatuses)
+
+	var orderAgg struct {
+		OrdersTotal          int64   `gorm:"column:orders_total"`
+		PaidOrders           int64   `gorm:"column:paid_orders"`
+		CompletedOrders      int64   `gorm:"column:completed_orders"`
+		PendingPaymentOrders int64   `gorm:"column:pending_payment_orders"`
+		ProcessingOrders     int64   `gorm:"column:processing_orders"`
+		GMVPaid              float64 `gorm:"column:gmv_paid"`
 	}
+	orderSelectSQL := fmt.Sprintf(`
+		COUNT(*) as orders_total,
+		COALESCE(SUM(CASE WHEN status IN (%s) THEN 1 ELSE 0 END), 0) as paid_orders,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN 1 ELSE 0 END), 0) as completed_orders,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN 1 ELSE 0 END), 0) as pending_payment_orders,
+		COALESCE(SUM(CASE WHEN status IN (%s) THEN 1 ELSE 0 END), 0) as processing_orders,
+		COALESCE(SUM(CASE WHEN status IN (%s) THEN total_amount ELSE 0 END), 0) as gmv_paid
+	`, paidIn, constants.OrderStatusCompleted, constants.OrderStatusPendingPayment, processingIn, paidIn)
 
 	if err := r.db.Model(&models.Order{}).
-		Where("parent_id IS NULL AND created_at >= ? AND created_at < ? AND status IN ?", startAt, endAt, paidStatuses).
-		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&result.GMVPaid).Error; err != nil {
+		Select(orderSelectSQL).
+		Where("parent_id IS NULL AND created_at >= ? AND created_at < ?", startAt, endAt).
+		Scan(&orderAgg).Error; err != nil {
 		return result, err
 	}
+	result.OrdersTotal = orderAgg.OrdersTotal
+	result.PaidOrders = orderAgg.PaidOrders
+	result.CompletedOrders = orderAgg.CompletedOrders
+	result.PendingPaymentOrders = orderAgg.PendingPaymentOrders
+	result.ProcessingOrders = orderAgg.ProcessingOrders
+	result.GMVPaid = orderAgg.GMVPaid
 
-	paymentBase := func() *gorm.DB {
-		return onlinePaymentBase(r.db, startAt, endAt)
+	// 支付聚合：将 3 个串行 COUNT 查询合并为 1 个
+	var paymentAgg struct {
+		PaymentsTotal   int64 `gorm:"column:payments_total"`
+		PaymentsSuccess int64 `gorm:"column:payments_success"`
+		PaymentsFailed  int64 `gorm:"column:payments_failed"`
 	}
-	if err := paymentBase().Count(&result.PaymentsTotal).Error; err != nil {
+	paymentSelectSQL := fmt.Sprintf(`
+		COUNT(*) as payments_total,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN 1 ELSE 0 END), 0) as payments_success,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN 1 ELSE 0 END), 0) as payments_failed
+	`, constants.PaymentStatusSuccess, constants.PaymentStatusFailed)
+
+	if err := onlinePaymentBase(r.db, startAt, endAt).
+		Select(paymentSelectSQL).
+		Scan(&paymentAgg).Error; err != nil {
 		return result, err
 	}
-	if err := paymentBase().Where("status = ?", constants.PaymentStatusSuccess).Count(&result.PaymentsSuccess).Error; err != nil {
-		return result, err
-	}
-	if err := paymentBase().Where("status = ?", constants.PaymentStatusFailed).Count(&result.PaymentsFailed).Error; err != nil {
-		return result, err
-	}
+	result.PaymentsTotal = paymentAgg.PaymentsTotal
+	result.PaymentsSuccess = paymentAgg.PaymentsSuccess
+	result.PaymentsFailed = paymentAgg.PaymentsFailed
 
 	if err := r.db.Model(&models.User{}).
 		Where("created_at >= ? AND created_at < ?", startAt, endAt).
@@ -249,92 +253,47 @@ func (r *GormDashboardRepository) GetOverview(startAt, endAt time.Time) (Dashboa
 
 // GetOrderTrends 获取订单趋势
 func (r *GormDashboardRepository) GetOrderTrends(startAt, endAt time.Time) ([]DashboardOrderTrendRow, error) {
-	type orderRow struct {
-		CreatedAt time.Time
-		Status    string
-	}
+	dayExpr := dateGroupExpr(r.db, "created_at", startAt.Location(), startAt)
+	paidIn := quotedStatusList(paidOrderStatuses())
 
-	rows := make([]orderRow, 0)
+	rows := make([]DashboardOrderTrendRow, 0)
+	selectSQL := fmt.Sprintf(`
+		%s as day,
+		COUNT(*) as orders_total,
+		COALESCE(SUM(CASE WHEN status IN (%s) THEN 1 ELSE 0 END), 0) as orders_paid
+	`, dayExpr, paidIn)
+
 	if err := r.db.Model(&models.Order{}).
-		Select("created_at, status").
+		Select(selectSQL).
 		Where("parent_id IS NULL AND created_at >= ? AND created_at < ?", startAt, endAt).
-		Order("created_at asc").
+		Group(dayExpr).
+		Order("day ASC").
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-
-	paidStatuses := make(map[string]struct{}, len(paidOrderStatuses()))
-	for _, status := range paidOrderStatuses() {
-		paidStatuses[status] = struct{}{}
-	}
-
-	location := startAt.Location()
-	grouped := make(map[string]*DashboardOrderTrendRow, len(rows))
-	for _, row := range rows {
-		day := dashboardDayKey(row.CreatedAt, location)
-		point := grouped[day]
-		if point == nil {
-			point = &DashboardOrderTrendRow{Day: day}
-			grouped[day] = point
-		}
-		point.OrdersTotal += 1
-		if _, ok := paidStatuses[row.Status]; ok {
-			point.OrdersPaid += 1
-		}
-	}
-
-	result := make([]DashboardOrderTrendRow, 0, len(grouped))
-	for _, item := range grouped {
-		result = append(result, *item)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Day < result[j].Day
-	})
-	return result, nil
+	return rows, nil
 }
 
 // GetPaymentTrends 获取支付趋势
 func (r *GormDashboardRepository) GetPaymentTrends(startAt, endAt time.Time) ([]DashboardPaymentTrendRow, error) {
-	type paymentRow struct {
-		CreatedAt time.Time
-		Status    string
-		Amount    float64
-	}
+	dayExpr := dateGroupExpr(r.db, "created_at", startAt.Location(), startAt)
 
-	rows := make([]paymentRow, 0)
+	rows := make([]DashboardPaymentTrendRow, 0)
+	selectSQL := fmt.Sprintf(`
+		%s as day,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN 1 ELSE 0 END), 0) as payments_success,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN 1 ELSE 0 END), 0) as payments_failed,
+		COALESCE(SUM(CASE WHEN status = '%s' THEN amount ELSE 0 END), 0) as gmv_paid
+	`, dayExpr, constants.PaymentStatusSuccess, constants.PaymentStatusFailed, constants.PaymentStatusSuccess)
+
 	if err := onlinePaymentBase(r.db, startAt, endAt).
-		Select("created_at, status, amount").
-		Order("created_at asc").
+		Select(selectSQL).
+		Group(dayExpr).
+		Order("day ASC").
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-
-	location := startAt.Location()
-	grouped := make(map[string]*DashboardPaymentTrendRow, len(rows))
-	for _, row := range rows {
-		day := dashboardDayKey(row.CreatedAt, location)
-		point := grouped[day]
-		if point == nil {
-			point = &DashboardPaymentTrendRow{Day: day}
-			grouped[day] = point
-		}
-		switch row.Status {
-		case constants.PaymentStatusSuccess:
-			point.PaymentsSuccess += 1
-			point.GMVPaid += row.Amount
-		case constants.PaymentStatusFailed:
-			point.PaymentsFailed += 1
-		}
-	}
-
-	result := make([]DashboardPaymentTrendRow, 0, len(grouped))
-	for _, item := range grouped {
-		result = append(result, *item)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Day < result[j].Day
-	})
-	return result, nil
+	return rows, nil
 }
 
 // GetStockStats 获取库存总览统计
@@ -736,47 +695,25 @@ func (r *GormDashboardRepository) GetProfitOverview(startAt, endAt time.Time) (D
 
 // GetProfitTrends 获取利润趋势
 func (r *GormDashboardRepository) GetProfitTrends(startAt, endAt time.Time) ([]DashboardProfitTrendRow, error) {
-	type profitRow struct {
-		CreatedAt time.Time
-		Revenue   float64
-		Cost      float64
-	}
+	dayExpr := dateGroupExpr(r.db, "orders.created_at", startAt.Location(), startAt)
 
-	rows := make([]profitRow, 0)
+	rows := make([]DashboardProfitTrendRow, 0)
+	selectSQL := fmt.Sprintf(`
+		%s as day,
+		COALESCE(SUM(order_items.total_price - order_items.coupon_discount), 0) as revenue,
+		COALESCE(SUM(order_items.cost_price * order_items.quantity), 0) as cost
+	`, dayExpr)
+
 	if err := r.db.Model(&models.OrderItem{}).
-		Select(`
-			orders.created_at as created_at,
-			(order_items.total_price - order_items.coupon_discount) as revenue,
-			(order_items.cost_price * order_items.quantity) as cost
-		`).
+		Select(selectSQL).
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Where("order_items.cost_price > 0 AND orders.created_at >= ? AND orders.created_at < ? AND orders.status IN ?", startAt, endAt, paidOrderStatuses()).
-		Order("orders.created_at asc").
+		Group(dayExpr).
+		Order("day ASC").
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-
-	location := startAt.Location()
-	grouped := make(map[string]*DashboardProfitTrendRow, len(rows))
-	for _, row := range rows {
-		day := dashboardDayKey(row.CreatedAt, location)
-		point := grouped[day]
-		if point == nil {
-			point = &DashboardProfitTrendRow{Day: day}
-			grouped[day] = point
-		}
-		point.Revenue += row.Revenue
-		point.Cost += row.Cost
-	}
-
-	result := make([]DashboardProfitTrendRow, 0, len(grouped))
-	for _, item := range grouped {
-		result = append(result, *item)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Day < result[j].Day
-	})
-	return result, nil
+	return rows, nil
 }
 
 // GetTopChannels 获取支付渠道排行榜

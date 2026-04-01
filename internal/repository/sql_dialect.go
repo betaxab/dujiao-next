@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dujiao-next/internal/constants"
 
@@ -98,4 +99,44 @@ func repeatLikeArgs(like string, count int) []interface{} {
 		args = append(args, like)
 	}
 	return args
+}
+
+// dateGroupExpr 构建 SQL 日期分组表达式，将 UTC 时间戳转为目标时区的 YYYY-MM-DD 字符串。
+// refTime 用于 SQLite 获取固定 UTC 偏移（SQLite 不支持命名时区）。
+func dateGroupExpr(db *gorm.DB, column string, loc *time.Location, refTime time.Time) string {
+	if loc == nil {
+		loc = time.UTC
+	}
+	dialect := dbDialectName(db)
+	switch dialect {
+	case "postgres", "postgresql":
+		zoneName := loc.String()
+		if zoneName == "" || zoneName == "Local" {
+			zoneName = "UTC"
+		}
+		return fmt.Sprintf("TO_CHAR(%s AT TIME ZONE '%s', 'YYYY-MM-DD')", column, zoneName)
+	default: // sqlite
+		_, offset := refTime.In(loc).Zone()
+		sign := "+"
+		if offset < 0 {
+			sign = "-"
+			offset = -offset
+		}
+		hours := offset / 3600
+		minutes := (offset % 3600) / 60
+		if minutes != 0 {
+			return fmt.Sprintf("strftime('%%Y-%%m-%%d', %s, '%s%d hours', '%s%d minutes')", column, sign, hours, sign, minutes)
+		}
+		return fmt.Sprintf("strftime('%%Y-%%m-%%d', %s, '%s%d hours')", column, sign, hours)
+	}
+}
+
+// quotedStatusList 将状态常量数组拼接为 SQL IN 子句所需的带引号逗号分隔列表。
+// 仅用于内部常量值，不可用于用户输入。
+func quotedStatusList(statuses []string) string {
+	parts := make([]string, len(statuses))
+	for i, s := range statuses {
+		parts[i] = "'" + s + "'"
+	}
+	return strings.Join(parts, ",")
 }
