@@ -66,6 +66,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 	r.Use(RequestIDMiddleware())
 	r.Use(LoggerMiddleware(log))
 	r.Use(CORSMiddleware(cfg.CORS))
+	r.Use(CallbackRouteMiddleware(c.SettingService, publicHandler, upstreamHandler))
 
 	// 静态文件服务（上传的图片）- 必须放在最前面
 	r.Static("/uploads", "./uploads")

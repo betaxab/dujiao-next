@@ -394,6 +394,18 @@ const (
 	SettingKeyRegistrationConfig         = "registration_config"
 	SettingFieldRegistrationEnabled      = "registration_enabled"
 	SettingFieldEmailVerificationEnabled = "email_verification_enabled"
+
+	SettingKeyCallbackRoutesConfig = "callback_routes_config"
+	SettingFieldPaymentCallback    = "payment_callback"
+	SettingFieldPaypalWebhook      = "paypal_webhook"
+	SettingFieldStripeWebhook      = "stripe_webhook"
+	SettingFieldUpstreamCallback   = "upstream_callback"
+
+	// 默认回调路由路径
+	DefaultPaymentCallbackPath  = "/api/v1/payments/callback"
+	DefaultPaypalWebhookPath    = "/api/v1/payments/webhook/paypal"
+	DefaultStripeWebhookPath    = "/api/v1/payments/webhook/stripe"
+	DefaultUpstreamCallbackPath = "/api/v1/upstream/callback"
 )
 
 // 币种常量

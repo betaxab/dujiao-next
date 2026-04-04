@@ -47,7 +47,8 @@ func (h *Handler) PaymentCallback(c *gin.Context) {
 		"alert_level": "warning",
 		"message":     "支付回调请求无法匹配已支持的回调格式",
 	})
-	c.String(http.StatusBadRequest, constants.EpayCallbackFail)
+	c.AbortWithStatus(http.StatusNotFound)
+	return
 }
 
 func parseCallbackForm(c *gin.Context) (map[string][]string, error) {

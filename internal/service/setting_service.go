@@ -160,6 +160,22 @@ func (s *SettingService) GetWalletOnlyPayment() bool {
 	return parseSettingBool(raw)
 }
 
+// GetCallbackRoutes 获取自定义回调路由配置。未配置时返回 nil。
+func (s *SettingService) GetCallbackRoutes() *CallbackRoutesSetting {
+	if s == nil {
+		return nil
+	}
+	value, err := s.GetByKey(constants.SettingKeyCallbackRoutesConfig)
+	if err != nil || value == nil {
+		return nil
+	}
+	setting := callbackRoutesSettingFromJSON(value)
+	if !setting.HasCustomRoutes() {
+		return nil
+	}
+	return &setting
+}
+
 // GetWalletRechargeChannelIDs 获取钱包充值允许的支付渠道ID列表
 func (s *SettingService) GetWalletRechargeChannelIDs() []uint {
 	if s == nil {
