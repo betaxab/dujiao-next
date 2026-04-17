@@ -357,6 +357,7 @@ func SetupRouter(cfg *config.Config, c *provider.Container) *gin.Engine {
 				authorized.POST("/card-secrets/export", adminHandler.ExportCardSecrets)
 				authorized.GET("/card-secrets/stats", adminHandler.GetCardSecretStats)
 				authorized.GET("/card-secrets/batches", adminHandler.GetCardSecretBatches)
+				authorized.PUT("/card-secrets/batches/:id", adminHandler.UpdateCardSecretBatch)
 				authorized.GET("/card-secrets/template", adminHandler.GetCardSecretTemplate)
 				authorized.POST("/gift-cards/generate", adminHandler.GenerateGiftCards)
 				authorized.GET("/gift-cards", adminHandler.GetGiftCards)

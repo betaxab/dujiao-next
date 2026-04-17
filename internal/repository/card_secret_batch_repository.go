@@ -12,6 +12,7 @@ import (
 type CardSecretBatchRepository interface {
 	Create(batch *models.CardSecretBatch) error
 	GetByID(id uint) (*models.CardSecretBatch, error)
+	Update(batch *models.CardSecretBatch) error
 	ListByProduct(productID, skuID uint, page, pageSize int) ([]models.CardSecretBatch, int64, error)
 	DeleteByProduct(productID uint) error
 	WithTx(tx *gorm.DB) *GormCardSecretBatchRepository
@@ -56,6 +57,14 @@ func (r *GormCardSecretBatchRepository) GetByID(id uint) (*models.CardSecretBatc
 		return nil, err
 	}
 	return &batch, nil
+}
+
+// Update 更新批次
+func (r *GormCardSecretBatchRepository) Update(batch *models.CardSecretBatch) error {
+	if batch == nil {
+		return errors.New("batch is nil")
+	}
+	return r.db.Save(batch).Error
 }
 
 // ListByProduct 按商品获取批次列表

@@ -47,6 +47,7 @@ func BuiltinRoleSeeds() []RoleSeed {
 				{Object: "/admin/card-secrets/export", Action: "POST"},
 				{Object: "/admin/card-secrets/stats", Action: "GET"},
 				{Object: "/admin/card-secrets/batches", Action: "GET"},
+				{Object: "/admin/card-secrets/batches/:id", Action: "PUT"},
 				{Object: "/admin/card-secrets/template", Action: "GET"},
 				{Object: "/admin/gift-cards", Action: "*"},
 				{Object: "/admin/gift-cards/:id", Action: "*"},

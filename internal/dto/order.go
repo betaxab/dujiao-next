@@ -189,6 +189,7 @@ type FulfillmentResp struct {
 	Payload          string      `json:"payload"`
 	PayloadLineCount int         `json:"payload_line_count"`
 	DeliveryData     models.JSON `json:"delivery_data"`
+	BatchRemark      string      `json:"batch_remark"`
 	DeliveredAt      *time.Time  `json:"delivered_at,omitempty"`
 }
 

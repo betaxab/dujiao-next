@@ -465,3 +465,71 @@ func TestCardSecretServiceListBatchesReturnsRealtimeCounts(t *testing.T) {
 		}
 	}
 }
+
+func TestCardSecretServiceSupportsBatchNoteAndRemarkUpdate(t *testing.T) {
+	db := setupCardSecretServiceTestDB(t)
+
+	product := &models.Product{
+		CategoryID:      1,
+		Slug:            "card-secret-batch-note-remark",
+		TitleJSON:       models.JSON{"zh-CN": "批次备注测试商品"},
+		PriceAmount:     models.NewMoneyFromDecimal(decimal.NewFromInt(66)),
+		PurchaseType:    constants.ProductPurchaseMember,
+		FulfillmentType: constants.FulfillmentTypeAuto,
+		IsActive:        true,
+	}
+	if err := db.Create(product).Error; err != nil {
+		t.Fatalf("create product failed: %v", err)
+	}
+
+	defaultSKU := &models.ProductSKU{
+		ProductID:   product.ID,
+		SKUCode:     models.DefaultSKUCode,
+		PriceAmount: models.NewMoneyFromDecimal(decimal.NewFromInt(66)),
+		IsActive:    true,
+	}
+	if err := db.Create(defaultSKU).Error; err != nil {
+		t.Fatalf("create default sku failed: %v", err)
+	}
+
+	svc := NewCardSecretService(
+		repository.NewCardSecretRepository(db),
+		repository.NewCardSecretBatchRepository(db),
+		repository.NewProductRepository(db),
+		repository.NewProductSKURepository(db),
+	)
+
+	batch, _, err := svc.CreateCardSecretBatch(CreateCardSecretBatchInput{
+		ProductID: product.ID,
+		Secrets:   []string{"NOTE-REMARK-001"},
+		BatchNo:   "NOTE-REMARK-BATCH",
+		Note:      "管理员备注 A",
+		Remark:    "用户可见说明 A",
+		Source:    constants.CardSecretSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("create batch failed: %v", err)
+	}
+	if batch.Note != "管理员备注 A" || batch.Remark != "用户可见说明 A" {
+		t.Fatalf("batch note/remark mismatch: %+v", batch)
+	}
+
+	updated, err := svc.UpdateCardSecretBatch(batch.ID, "管理员备注 B", "用户可见说明 B")
+	if err != nil {
+		t.Fatalf("update batch note/remark failed: %v", err)
+	}
+	if updated.Note != "管理员备注 B" || updated.Remark != "用户可见说明 B" {
+		t.Fatalf("updated note/remark mismatch: %+v", updated)
+	}
+
+	summaries, _, err := svc.ListBatches(product.ID, defaultSKU.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("list batches failed: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("list batches want 1 got %d", len(summaries))
+	}
+	if summaries[0].Note != "管理员备注 B" || summaries[0].Remark != "用户可见说明 B" {
+		t.Fatalf("summary note/remark mismatch: %+v", summaries[0])
+	}
+}

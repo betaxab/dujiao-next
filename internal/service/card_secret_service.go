@@ -44,6 +44,7 @@ type CreateCardSecretBatchInput struct {
 	Secrets   []string
 	BatchNo   string
 	Note      string
+	Remark    string
 	Source    string
 	AdminID   uint
 }
@@ -94,6 +95,7 @@ func (s *CardSecretService) CreateCardSecretBatch(input CreateCardSecretBatchInp
 		Source:     source,
 		TotalCount: len(normalized),
 		Note:       strings.TrimSpace(input.Note),
+		Remark:     strings.TrimSpace(input.Remark),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -140,6 +142,7 @@ type ImportCardSecretCSVInput struct {
 	File      *multipart.FileHeader
 	BatchNo   string
 	Note      string
+	Remark    string
 	AdminID   uint
 }
 
@@ -165,6 +168,7 @@ func (s *CardSecretService) ImportCardSecretCSV(input ImportCardSecretCSVInput) 
 		Secrets:   secrets,
 		BatchNo:   input.BatchNo,
 		Note:      input.Note,
+		Remark:    input.Remark,
 		Source:    constants.CardSecretSourceCSV,
 		AdminID:   input.AdminID,
 	})
@@ -410,6 +414,7 @@ type CardSecretBatchSummary struct {
 	BatchNo        string    `json:"batch_no"`
 	Source         string    `json:"source"`
 	Note           string    `json:"note"`
+	Remark         string    `json:"remark"`
 	TotalCount     int64     `json:"total_count"`
 	AvailableCount int64     `json:"available_count"`
 	ReservedCount  int64     `json:"reserved_count"`
@@ -503,6 +508,7 @@ func (s *CardSecretService) ListBatches(productID, skuID uint, page, pageSize in
 			BatchNo:        item.BatchNo,
 			Source:         item.Source,
 			Note:           item.Note,
+			Remark:         item.Remark,
 			TotalCount:     counter.available + counter.reserved + counter.used,
 			AvailableCount: counter.available,
 			ReservedCount:  counter.reserved,
@@ -511,6 +517,33 @@ func (s *CardSecretService) ListBatches(productID, skuID uint, page, pageSize in
 		})
 	}
 	return result, total, nil
+}
+
+// UpdateCardSecretBatch 更新批次说明
+func (s *CardSecretService) UpdateCardSecretBatch(batchID uint, note, remark string) (*models.CardSecretBatch, error) {
+	if batchID == 0 {
+		return nil, ErrCardSecretInvalid
+	}
+	if s.batchRepo == nil {
+		return nil, ErrCardSecretBatchUpdateFailed
+	}
+
+	batch, err := s.batchRepo.GetByID(batchID)
+	if err != nil {
+		return nil, ErrCardSecretBatchFetchFailed
+	}
+	if batch == nil {
+		return nil, ErrNotFound
+	}
+
+	batch.Note = strings.TrimSpace(note)
+	batch.Remark = strings.TrimSpace(remark)
+	batch.UpdatedAt = time.Now()
+
+	if err := s.batchRepo.Update(batch); err != nil {
+		return nil, ErrCardSecretBatchUpdateFailed
+	}
+	return batch, nil
 }
 
 func (s *CardSecretService) resolveCardSecretSKU(productID, rawSKUID uint) (*models.ProductSKU, error) {

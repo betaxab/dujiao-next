@@ -14,7 +14,8 @@ type CardSecretBatch struct {
 	BatchNo    string         `gorm:"uniqueIndex;not null" json:"batch_no"`                 // 批次号
 	Source     string         `gorm:"not null" json:"source"`                               // 来源（manual/csv）
 	TotalCount int            `gorm:"not null" json:"total_count"`                          // 总数量
-	Note       string         `gorm:"type:text" json:"note"`                                // 备注
+	Remark     string         `gorm:"type:text" json:"remark"`                              // 批次说明（用户可见）
+	Note       string         `gorm:"type:text" json:"note"`                                // 备注（管理员可见）
 	CreatedBy  *uint          `gorm:"index" json:"created_by,omitempty"`                    // 创建管理员ID
 	CreatedAt  time.Time      `gorm:"index" json:"created_at"`                              // 创建时间
 	UpdatedAt  time.Time      `gorm:"index" json:"updated_at"`                              // 更新时间

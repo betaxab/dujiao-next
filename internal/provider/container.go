@@ -235,6 +235,7 @@ func (c *Container) initServices() {
 		ProductRepo:           c.ProductRepo,
 		ProductSKURepo:        c.ProductSKURepo,
 		CardSecretRepo:        c.CardSecretRepo,
+		CardSecretBatchRepo:   c.CardSecretBatchRepo,
 		CouponRepo:            c.CouponRepo,
 		CouponUsageRepo:       c.CouponUsageRepo,
 		PromotionRepo:         c.PromotionRepo,

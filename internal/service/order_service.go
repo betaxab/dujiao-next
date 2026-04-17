@@ -25,6 +25,7 @@ type OrderService struct {
 	productRepo           repository.ProductRepository
 	productSKURepo        repository.ProductSKURepository
 	cardSecretRepo        repository.CardSecretRepository
+	cardSecretBatchRepo   repository.CardSecretBatchRepository
 	couponRepo            repository.CouponRepository
 	couponUsageRepo       repository.CouponUsageRepository
 	promotionRepo         repository.PromotionRepository
@@ -46,6 +47,7 @@ type OrderServiceOptions struct {
 	ProductRepo           repository.ProductRepository
 	ProductSKURepo        repository.ProductSKURepository
 	CardSecretRepo        repository.CardSecretRepository
+	CardSecretBatchRepo   repository.CardSecretBatchRepository
 	CouponRepo            repository.CouponRepository
 	CouponUsageRepo       repository.CouponUsageRepository
 	PromotionRepo         repository.PromotionRepository
@@ -68,6 +70,7 @@ func NewOrderService(opts OrderServiceOptions) *OrderService {
 		productRepo:           opts.ProductRepo,
 		productSKURepo:        opts.ProductSKURepo,
 		cardSecretRepo:        opts.CardSecretRepo,
+		cardSecretBatchRepo:   opts.CardSecretBatchRepo,
 		couponRepo:            opts.CouponRepo,
 		couponUsageRepo:       opts.CouponUsageRepo,
 		promotionRepo:         opts.PromotionRepo,

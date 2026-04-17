@@ -21,6 +21,13 @@ type CreateCardSecretBatchRequest struct {
 	Secrets   []string `json:"secrets" binding:"required"`
 	BatchNo   string   `json:"batch_no"`
 	Note      string   `json:"note"`
+	Remark    string   `json:"remark"`
+}
+
+// UpdateCardSecretBatchRequest 更新卡密批次请求
+type UpdateCardSecretBatchRequest struct {
+	Note   string `json:"note"`
+	Remark string `json:"remark"`
 }
 
 // UpdateCardSecretRequest 更新卡密请求
@@ -94,6 +101,7 @@ func (h *Handler) CreateCardSecretBatch(c *gin.Context) {
 		Secrets:   req.Secrets,
 		BatchNo:   req.BatchNo,
 		Note:      req.Note,
+		Remark:    req.Remark,
 		Source:    constants.CardSecretSourceManual,
 		AdminID:   adminID,
 	})
@@ -147,6 +155,7 @@ func (h *Handler) ImportCardSecretCSV(c *gin.Context) {
 	}
 	batchNo := strings.TrimSpace(c.PostForm("batch_no"))
 	note := strings.TrimSpace(c.PostForm("note"))
+	remark := strings.TrimSpace(c.PostForm("remark"))
 
 	batch, created, err := h.CardSecretService.ImportCardSecretCSV(service.ImportCardSecretCSVInput{
 		ProductID: productID,
@@ -154,6 +163,7 @@ func (h *Handler) ImportCardSecretCSV(c *gin.Context) {
 		File:      file,
 		BatchNo:   batchNo,
 		Note:      note,
+		Remark:    remark,
 		AdminID:   adminID,
 	})
 	if err != nil {
@@ -440,6 +450,40 @@ func (h *Handler) GetCardSecretBatches(c *gin.Context) {
 	}
 	pagination := response.BuildPagination(page, pageSize, total)
 	response.SuccessWithPage(c, items, pagination)
+}
+
+// UpdateCardSecretBatch 更新卡密批次说明
+func (h *Handler) UpdateCardSecretBatch(c *gin.Context) {
+	rawID, err := shared.ParseParamUint(c, "id")
+	if err != nil {
+		shared.RespondError(c, response.CodeBadRequest, "error.card_secret_invalid", nil)
+		return
+	}
+
+	var req UpdateCardSecretBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		shared.RespondBindError(c, err)
+		return
+	}
+
+	batch, err := h.CardSecretService.UpdateCardSecretBatch(rawID, req.Note, req.Remark)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrNotFound):
+			shared.RespondError(c, response.CodeNotFound, "error.card_secret_batch_not_found", nil)
+		case errors.Is(err, service.ErrCardSecretInvalid):
+			shared.RespondError(c, response.CodeBadRequest, "error.card_secret_invalid", nil)
+		case errors.Is(err, service.ErrCardSecretBatchFetchFailed):
+			shared.RespondError(c, response.CodeInternal, "error.card_secret_batch_fetch_failed", err)
+		case errors.Is(err, service.ErrCardSecretBatchUpdateFailed):
+			shared.RespondError(c, response.CodeInternal, "error.card_secret_batch_update_failed", err)
+		default:
+			shared.RespondError(c, response.CodeInternal, "error.card_secret_batch_update_failed", err)
+		}
+		return
+	}
+
+	response.Success(c, batch)
 }
 
 // GetCardSecretTemplate 下载导入模板

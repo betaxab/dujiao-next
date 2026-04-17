@@ -96,6 +96,39 @@ func (h *Handler) enrichOrderWithRefundRecords(order *models.Order, detail *dto.
 	}
 }
 
+// enrichOrderWithFulfillmentBatchRemark 为自动交付订单补充批次说明（用户可见）。
+func (h *Handler) enrichOrderWithFulfillmentBatchRemark(order *models.Order, detail *dto.OrderDetail) {
+	if h == nil || order == nil || detail == nil || h.OrderService == nil {
+		return
+	}
+	remarksByOrderID := h.OrderService.BuildFulfillmentBatchRemarkMap(order)
+	h.applyOrderFulfillmentBatchRemarkRecursive(order, detail, remarksByOrderID)
+}
+
+func (h *Handler) applyOrderFulfillmentBatchRemarkRecursive(order *models.Order, detail *dto.OrderDetail, remarksByOrderID map[uint]string) {
+	if order == nil || detail == nil {
+		return
+	}
+	if detail.Fulfillment != nil {
+		fulfillmentType := strings.TrimSpace(detail.Fulfillment.Type)
+		if fulfillmentType == constants.FulfillmentTypeAuto {
+			if remark, ok := remarksByOrderID[order.ID]; ok {
+				detail.Fulfillment.BatchRemark = remark
+			}
+		}
+	}
+	if len(order.Children) == 0 || len(detail.Children) == 0 {
+		return
+	}
+	childLen := len(order.Children)
+	if len(detail.Children) < childLen {
+		childLen = len(detail.Children)
+	}
+	for idx := 0; idx < childLen; idx++ {
+		h.applyOrderFulfillmentBatchRemarkRecursive(&order.Children[idx], &detail.Children[idx], remarksByOrderID)
+	}
+}
+
 // OrderItemRequest 订单项请求
 type OrderItemRequest struct {
 	ProductID       uint   `json:"product_id" binding:"required"`
@@ -439,6 +472,7 @@ func (h *Handler) GetOrderByOrderNo(c *gin.Context) {
 	orderDetail := dto.NewOrderDetailTruncated(order)
 	h.enrichOrderWithAllowedChannels(order, &orderDetail)
 	h.enrichOrderWithRefundRecords(order, &orderDetail)
+	h.enrichOrderWithFulfillmentBatchRemark(order, &orderDetail)
 	response.Success(c, orderDetail)
 }
 
