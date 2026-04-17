@@ -79,6 +79,13 @@ func (r *GormProductRepository) List(filter ProductListFilter) ([]models.Product
 		like := "%" + search + "%"
 		condition, argCount := buildLocalizedLikeCondition(r.db, []string{"slug"}, []string{"title_json", "description_json"})
 		searchQuery := r.db.Where(condition, repeatLikeArgs(like, argCount)...)
+
+		skuCondition, skuArgCount := buildLocalizedLikeCondition(r.db, []string{"ps.sku_code"}, nil)
+		searchQuery = searchQuery.Or(
+			"EXISTS (SELECT 1 FROM product_skus ps WHERE ps.product_id = products.id AND ps.deleted_at IS NULL AND ("+skuCondition+"))",
+			repeatLikeArgs(like, skuArgCount)...,
+		)
+
 		if numericID, err := strconv.ParseUint(search, 10, 64); err == nil && numericID > 0 {
 			searchQuery = searchQuery.Or("id = ?", uint(numericID))
 		}
