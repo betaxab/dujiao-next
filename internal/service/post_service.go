@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/models"
 	"github.com/dujiao-next/internal/repository"
@@ -96,6 +98,10 @@ func (s *PostService) Create(input CreatePostInput) (*models.Post, error) {
 		Thumbnail:   input.Thumbnail,
 		IsPublished: isPublished,
 	}
+	if isPublished {
+		now := time.Now()
+		post.PublishedAt = &now
+	}
 
 	if err := s.repo.Create(&post); err != nil {
 		return nil, err
@@ -132,7 +138,12 @@ func (s *PostService) Update(id string, input CreatePostInput) (*models.Post, er
 	post.ContentJSON = models.JSON(input.ContentJSON)
 	post.Thumbnail = input.Thumbnail
 	if input.IsPublished != nil {
+		wasPublished := post.IsPublished
 		post.IsPublished = *input.IsPublished
+		if *input.IsPublished && !wasPublished && post.PublishedAt == nil {
+			now := time.Now()
+			post.PublishedAt = &now
+		}
 	}
 
 	if err := s.repo.Update(post); err != nil {
