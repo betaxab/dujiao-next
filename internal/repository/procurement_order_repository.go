@@ -33,8 +33,8 @@ type ProcurementOrderListFilter struct {
 	Status          string
 	LocalOrderNo    string
 	UpstreamOrderNo string
-	CreatedFrom     string
-	CreatedTo       string
+	CreatedFrom     *time.Time
+	CreatedTo       *time.Time
 	Pagination
 }
 
@@ -146,11 +146,11 @@ func (r *GormProcurementOrderRepository) List(filter ProcurementOrderListFilter)
 	if filter.UpstreamOrderNo != "" {
 		q = q.Where("upstream_order_no = ?", filter.UpstreamOrderNo)
 	}
-	if filter.CreatedFrom != "" {
-		q = q.Where("created_at >= ?", filter.CreatedFrom)
+	if filter.CreatedFrom != nil {
+		q = q.Where("created_at >= ?", *filter.CreatedFrom)
 	}
-	if filter.CreatedTo != "" {
-		q = q.Where("created_at <= ?", filter.CreatedTo)
+	if filter.CreatedTo != nil {
+		q = q.Where("created_at <= ?", *filter.CreatedTo)
 	}
 
 	if err := q.Count(&total).Error; err != nil {
@@ -181,11 +181,11 @@ func (r *GormProcurementOrderRepository) StatsByStatus(filter ProcurementOrderLi
 	if filter.UpstreamOrderNo != "" {
 		q = q.Where("upstream_order_no = ?", filter.UpstreamOrderNo)
 	}
-	if filter.CreatedFrom != "" {
-		q = q.Where("created_at >= ?", filter.CreatedFrom)
+	if filter.CreatedFrom != nil {
+		q = q.Where("created_at >= ?", *filter.CreatedFrom)
 	}
-	if filter.CreatedTo != "" {
-		q = q.Where("created_at <= ?", filter.CreatedTo)
+	if filter.CreatedTo != nil {
+		q = q.Where("created_at <= ?", *filter.CreatedTo)
 	}
 
 	type row struct {

@@ -41,12 +41,18 @@ func (h *Handler) GetProcurementOrders(c *gin.Context) {
 	if upstreamOrderNo := strings.TrimSpace(c.Query("upstream_order_no")); upstreamOrderNo != "" {
 		filter.UpstreamOrderNo = upstreamOrderNo
 	}
-	if createdFrom := strings.TrimSpace(c.Query("created_from")); createdFrom != "" {
-		filter.CreatedFrom = createdFrom
+	createdFrom, err := shared.ParseTimeNullable(strings.TrimSpace(c.Query("created_from")))
+	if err != nil {
+		shared.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
 	}
-	if createdTo := strings.TrimSpace(c.Query("created_to")); createdTo != "" {
-		filter.CreatedTo = createdTo
+	filter.CreatedFrom = createdFrom
+	createdTo, err := shared.ParseTimeNullable(strings.TrimSpace(c.Query("created_to")))
+	if err != nil {
+		shared.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
 	}
+	filter.CreatedTo = createdTo
 
 	orders, total, err := h.ProcurementOrderService.List(filter)
 	if err != nil {
@@ -77,12 +83,18 @@ func (h *Handler) GetProcurementOrderStats(c *gin.Context) {
 	if upstreamOrderNo := strings.TrimSpace(c.Query("upstream_order_no")); upstreamOrderNo != "" {
 		filter.UpstreamOrderNo = upstreamOrderNo
 	}
-	if createdFrom := strings.TrimSpace(c.Query("created_from")); createdFrom != "" {
-		filter.CreatedFrom = createdFrom
+	createdFrom, err := shared.ParseTimeNullable(strings.TrimSpace(c.Query("created_from")))
+	if err != nil {
+		shared.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
 	}
-	if createdTo := strings.TrimSpace(c.Query("created_to")); createdTo != "" {
-		filter.CreatedTo = createdTo
+	filter.CreatedFrom = createdFrom
+	createdTo, err := shared.ParseTimeNullable(strings.TrimSpace(c.Query("created_to")))
+	if err != nil {
+		shared.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
 	}
+	filter.CreatedTo = createdTo
 
 	stats, err := h.ProcurementOrderService.StatsByStatus(filter)
 	if err != nil {
