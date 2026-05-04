@@ -220,40 +220,21 @@ func (s *NotificationService) dispatchExceptionAlertCheck(ctx context.Context, s
 		}
 	}
 
-	overview, err := s.dashboardSvc.GetOverview(ctx, DashboardQueryInput{
-		Range:        "today",
-		Timezone:     time.Local.String(),
-		ForceRefresh: true,
-	})
+	paymentOrderAlertNow := time.Now()
+	paymentOrderAlertStart := paymentOrderAlertNow.Add(-time.Duration(setting.PaymentOrderAlertCheckSeconds) * time.Second)
+	paymentOrderCounts, err := s.dashboardSvc.GetPaymentOrderAlertCounts(ctx, paymentOrderAlertStart, paymentOrderAlertNow)
 	if err != nil {
 		return err
 	}
-	if overview == nil || len(overview.Alerts) == 0 {
-		return firstErr
-	}
 
-	alertLocale := resolveNotificationLocale(payload.Locale, setting.DefaultLocale)
-	for _, alert := range overview.Alerts {
-		if isInventoryAlertType(alert.Type) {
+	for _, itemPayload := range buildPaymentOrderAlertDispatchPayloads(setting, dashboardSetting, payload, paymentOrderCounts) {
+		allowed, intervalErr := acquirePaymentOrderAlertInterval(ctx, setting.PaymentOrderAlertIntervalSeconds, itemPayload)
+		if intervalErr != nil {
+			logger.Warnw("notification_payment_order_alert_interval_failed", "error", intervalErr)
+		}
+		if intervalErr == nil && !allowed {
 			continue
 		}
-		data := cloneNotificationVariables(payload.Data)
-		if data == nil {
-			data = map[string]interface{}{}
-		}
-		alertType := strings.TrimSpace(alert.Type)
-		data["alert_type"] = alertTypeLabelByType(alertLocale, alertType)
-		data["alert_type_label"] = data["alert_type"]
-		data["alert_type_key"] = alertType
-		data["alert_level"] = strings.TrimSpace(alert.Level)
-		data["alert_value"] = fmt.Sprintf("%d", alert.Value)
-		data["alert_threshold"] = fmt.Sprintf("%d", thresholdValueByAlertType(dashboardSetting.Alert, alertType))
-		data["message"] = thresholdMessageByAlertType(alertType)
-
-		itemPayload := payload
-		itemPayload.EventType = constants.NotificationEventExceptionAlert
-		itemPayload.BizType = constants.NotificationBizTypeDashboardAlert
-		itemPayload.Data = data
 		if err := s.dispatchSingleEvent(ctx, setting, itemPayload); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -600,6 +581,43 @@ func acquireInventoryAlertInterval(ctx context.Context, intervalSeconds int, pay
 	return cache.SetNX(ctx, key, "1", time.Duration(intervalSeconds)*time.Second)
 }
 
+// isPaymentOrderAlertType 判断是否为支付订单类告警
+func isPaymentOrderAlertType(alertType string) bool {
+	switch strings.ToLower(strings.TrimSpace(alertType)) {
+	case constants.NotificationAlertTypePendingOrders, constants.NotificationAlertTypePaymentsFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// acquirePaymentOrderAlertInterval 获取支付订单告警发送间隔锁
+func acquirePaymentOrderAlertInterval(ctx context.Context, intervalSeconds int, payload queue.NotificationDispatchPayload) (bool, error) {
+	alertType := resolvePaymentOrderAlertTypeKey(payload.Data)
+	if !isPaymentOrderAlertType(alertType) {
+		return true, nil
+	}
+	intervalSeconds = normalizeNotificationPaymentOrderAlertInterval(intervalSeconds)
+	key := "notification:payment_order_interval:" + alertType
+	return cache.SetNX(ctx, key, "1", time.Duration(intervalSeconds)*time.Second)
+}
+
+// resolvePaymentOrderAlertTypeKey 解析支付订单告警类型键
+func resolvePaymentOrderAlertTypeKey(data map[string]interface{}) string {
+	if len(data) == 0 {
+		return ""
+	}
+	normalized := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", data["alert_type_key"])))
+	if isPaymentOrderAlertType(normalized) {
+		return normalized
+	}
+	normalized = strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", data["alert_type"])))
+	if isPaymentOrderAlertType(normalized) {
+		return normalized
+	}
+	return ""
+}
+
 func resolveInventoryAlertTypeKey(data map[string]interface{}) string {
 	if len(data) == 0 {
 		return ""
@@ -738,6 +756,103 @@ func inventoryAlertLevel(alertType string) string {
 		return "error"
 	default:
 		return "warning"
+	}
+}
+
+// buildPaymentOrderAlertDispatchPayloads 构建支付订单告警通知载荷
+func buildPaymentOrderAlertDispatchPayloads(
+	setting NotificationCenterSetting,
+	dashboardSetting DashboardSetting,
+	payload queue.NotificationDispatchPayload,
+	counts repository.DashboardPaymentOrderAlertCountsRow,
+) []queue.NotificationDispatchPayload {
+	result := make([]queue.NotificationDispatchPayload, 0, 2)
+	if itemPayload, ok := buildPaymentOrderAlertDispatchPayload(
+		setting,
+		payload,
+		constants.NotificationAlertTypePendingOrders,
+		counts.PendingPaymentOrders,
+		dashboardSetting.Alert.PendingPaymentOrdersThreshold,
+	); ok {
+		result = append(result, itemPayload)
+	}
+	if itemPayload, ok := buildPaymentOrderAlertDispatchPayload(
+		setting,
+		payload,
+		constants.NotificationAlertTypePaymentsFailed,
+		counts.PaymentsFailed,
+		dashboardSetting.Alert.PaymentsFailedThreshold,
+	); ok {
+		result = append(result, itemPayload)
+	}
+	return result
+}
+
+// buildPaymentOrderAlertDispatchPayload 构建单个支付订单告警通知载荷
+func buildPaymentOrderAlertDispatchPayload(
+	setting NotificationCenterSetting,
+	payload queue.NotificationDispatchPayload,
+	alertType string,
+	value int64,
+	threshold int64,
+) (queue.NotificationDispatchPayload, bool) {
+	if value < threshold {
+		return queue.NotificationDispatchPayload{}, false
+	}
+
+	locale := resolveNotificationLocale(payload.Locale, setting.DefaultLocale)
+	data := cloneNotificationVariables(payload.Data)
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+	data["alert_type"] = alertTypeLabelByType(locale, alertType)
+	data["alert_type_label"] = data["alert_type"]
+	data["alert_type_key"] = alertType
+	data["alert_level"] = "warning"
+	data["alert_value"] = fmt.Sprintf("%d", value)
+	data["alert_threshold"] = fmt.Sprintf("%d", threshold)
+	data["message"] = buildPaymentOrderAlertMessage(locale, alertType, value, threshold, setting.PaymentOrderAlertIntervalSeconds)
+
+	itemPayload := payload
+	itemPayload.EventType = constants.NotificationEventExceptionAlert
+	itemPayload.BizType = constants.NotificationBizTypeDashboardAlert
+	itemPayload.Data = data
+	return itemPayload, true
+}
+
+// buildPaymentOrderAlertMessage 构建支付订单告警消息内容
+func buildPaymentOrderAlertMessage(locale string, alertType string, value, threshold int64, intervalSeconds int) string {
+	intervalText := formatPaymentOrderAlertInterval(locale, intervalSeconds)
+	switch strings.ToLower(strings.TrimSpace(alertType)) {
+	case constants.NotificationAlertTypePendingOrders:
+		return localizedNotificationText(
+			locale,
+			fmt.Sprintf("当前统计周期内待支付订单 %d 笔，已达到告警阈值 %d 笔；本类告警最短 %s 发送一次。", value, threshold, intervalText),
+			fmt.Sprintf("目前統計週期內待支付訂單 %d 筆，已達到告警門檻 %d 筆；本類告警最短 %s 發送一次。", value, threshold, intervalText),
+			fmt.Sprintf("Pending payment orders reached %d in the current alert window, meeting the threshold of %d; this alert is sent at most once every %s.", value, threshold, intervalText),
+		)
+	default:
+		return localizedNotificationText(
+			locale,
+			fmt.Sprintf("当前统计周期内支付失败 %d 笔，已达到告警阈值 %d 笔；本类告警最短 %s 发送一次。", value, threshold, intervalText),
+			fmt.Sprintf("目前統計週期內支付失敗 %d 筆，已達到告警門檻 %d 筆；本類告警最短 %s 發送一次。", value, threshold, intervalText),
+			fmt.Sprintf("Payment failures reached %d in the current alert window, meeting the threshold of %d; this alert is sent at most once every %s.", value, threshold, intervalText),
+		)
+	}
+}
+
+// formatPaymentOrderAlertInterval 格式化支付订单告警发送间隔
+func formatPaymentOrderAlertInterval(locale string, seconds int) string {
+	seconds = normalizeNotificationPaymentOrderAlertInterval(seconds)
+	switch {
+	case seconds%3600 == 0:
+		hours := seconds / 3600
+		return localizedNotificationText(locale, fmt.Sprintf("%d 小时", hours), fmt.Sprintf("%d 小時", hours), fmt.Sprintf("%d hours", hours))
+	case seconds%60 == 0:
+		minutes := seconds / 60
+		return localizedNotificationText(locale, fmt.Sprintf("%d 分钟", minutes), fmt.Sprintf("%d 分鐘", minutes), fmt.Sprintf("%d minutes", minutes))
+	default:
+		return localizedNotificationText(locale, fmt.Sprintf("%d 秒", seconds), fmt.Sprintf("%d 秒", seconds), fmt.Sprintf("%d seconds", seconds))
 	}
 }
 

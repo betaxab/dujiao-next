@@ -22,6 +22,13 @@ const (
 	notificationInventoryAlertIntervalDefaultSeconds = 1800
 	notificationInventoryAlertIntervalMinSeconds     = 60
 	notificationInventoryAlertIntervalMaxSeconds     = 604800
+
+	notificationPaymentOrderAlertIntervalDefaultSeconds = 1800
+	notificationPaymentOrderAlertIntervalMinSeconds     = 60
+	notificationPaymentOrderAlertIntervalMaxSeconds     = 604800
+	notificationPaymentOrderAlertCheckDefaultSeconds    = 86400
+	notificationPaymentOrderAlertCheckMinSeconds        = 60
+	notificationPaymentOrderAlertCheckMaxSeconds        = 604800
 )
 
 // NotificationChannelSetting 通知渠道配置
@@ -67,24 +74,28 @@ type NotificationTemplatesSetting struct {
 
 // NotificationCenterSetting 通知中心配置
 type NotificationCenterSetting struct {
-	DefaultLocale                 string                       `json:"default_locale"`
-	Channels                      NotificationChannelsSetting  `json:"channels"`
-	Scenes                        NotificationSceneSetting     `json:"scenes"`
-	Templates                     NotificationTemplatesSetting `json:"templates"`
-	DedupeTTLSeconds              int                          `json:"dedupe_ttl_seconds"`
-	InventoryAlertIntervalSeconds int                          `json:"inventory_alert_interval_seconds"`
-	IgnoredProductIDs             []uint                       `json:"ignored_product_ids"`
+	DefaultLocale                    string                       `json:"default_locale"`
+	Channels                         NotificationChannelsSetting  `json:"channels"`
+	Scenes                           NotificationSceneSetting     `json:"scenes"`
+	Templates                        NotificationTemplatesSetting `json:"templates"`
+	DedupeTTLSeconds                 int                          `json:"dedupe_ttl_seconds"`
+	InventoryAlertIntervalSeconds    int                          `json:"inventory_alert_interval_seconds"`
+	PaymentOrderAlertIntervalSeconds int                          `json:"payment_order_alert_interval_seconds"`
+	PaymentOrderAlertCheckSeconds    int                          `json:"payment_order_alert_check_interval_seconds"`
+	IgnoredProductIDs                []uint                       `json:"ignored_product_ids"`
 }
 
 // NotificationCenterSettingPatch 通知中心配置补丁
 type NotificationCenterSettingPatch struct {
-	DefaultLocale                 *string                     `json:"default_locale"`
-	Channels                      *NotificationChannelsPatch  `json:"channels"`
-	Scenes                        *NotificationScenePatch     `json:"scenes"`
-	Templates                     *NotificationTemplatesPatch `json:"templates"`
-	DedupeTTLSeconds              *int                        `json:"dedupe_ttl_seconds"`
-	InventoryAlertIntervalSeconds *int                        `json:"inventory_alert_interval_seconds"`
-	IgnoredProductIDs             *[]uint                     `json:"ignored_product_ids"`
+	DefaultLocale                    *string                     `json:"default_locale"`
+	Channels                         *NotificationChannelsPatch  `json:"channels"`
+	Scenes                           *NotificationScenePatch     `json:"scenes"`
+	Templates                        *NotificationTemplatesPatch `json:"templates"`
+	DedupeTTLSeconds                 *int                        `json:"dedupe_ttl_seconds"`
+	InventoryAlertIntervalSeconds    *int                        `json:"inventory_alert_interval_seconds"`
+	PaymentOrderAlertIntervalSeconds *int                        `json:"payment_order_alert_interval_seconds"`
+	PaymentOrderAlertCheckSeconds    *int                        `json:"payment_order_alert_check_interval_seconds"`
+	IgnoredProductIDs                *[]uint                     `json:"ignored_product_ids"`
 }
 
 // NotificationChannelsPatch 通知渠道补丁
@@ -206,9 +217,11 @@ func NotificationCenterDefaultSetting() NotificationCenterSetting {
 				},
 			},
 		},
-		DedupeTTLSeconds:              300,
-		InventoryAlertIntervalSeconds: notificationInventoryAlertIntervalDefaultSeconds,
-		IgnoredProductIDs:             []uint{},
+		DedupeTTLSeconds:                 300,
+		InventoryAlertIntervalSeconds:    notificationInventoryAlertIntervalDefaultSeconds,
+		PaymentOrderAlertIntervalSeconds: notificationPaymentOrderAlertIntervalDefaultSeconds,
+		PaymentOrderAlertCheckSeconds:    notificationPaymentOrderAlertCheckDefaultSeconds,
+		IgnoredProductIDs:                []uint{},
 	})
 }
 
@@ -219,6 +232,8 @@ func NormalizeNotificationCenterSetting(setting NotificationCenterSetting) Notif
 	setting.Channels.Telegram.Recipients = normalizeTelegramRecipients(setting.Channels.Telegram.Recipients)
 	setting.DedupeTTLSeconds = normalizeNotificationDedupeTTL(setting.DedupeTTLSeconds)
 	setting.InventoryAlertIntervalSeconds = normalizeNotificationInventoryAlertInterval(setting.InventoryAlertIntervalSeconds)
+	setting.PaymentOrderAlertIntervalSeconds = normalizeNotificationPaymentOrderAlertInterval(setting.PaymentOrderAlertIntervalSeconds)
+	setting.PaymentOrderAlertCheckSeconds = normalizeNotificationPaymentOrderAlertCheck(setting.PaymentOrderAlertCheckSeconds)
 	setting.IgnoredProductIDs = normalizeNotificationIgnoredProductIDs(setting.IgnoredProductIDs)
 	setting.Templates = normalizeNotificationTemplates(setting.Templates)
 	return setting
@@ -258,6 +273,12 @@ func ValidateNotificationCenterSetting(setting NotificationCenterSetting) error 
 	if normalized.InventoryAlertIntervalSeconds < notificationInventoryAlertIntervalMinSeconds || normalized.InventoryAlertIntervalSeconds > notificationInventoryAlertIntervalMaxSeconds {
 		return fmt.Errorf("%w: 库存告警频率需在 60-604800 秒之间", ErrNotificationConfigInvalid)
 	}
+	if normalized.PaymentOrderAlertIntervalSeconds < notificationPaymentOrderAlertIntervalMinSeconds || normalized.PaymentOrderAlertIntervalSeconds > notificationPaymentOrderAlertIntervalMaxSeconds {
+		return fmt.Errorf("%w: 支付订单告警频率需在 60-604800 秒之间", ErrNotificationConfigInvalid)
+	}
+	if normalized.PaymentOrderAlertCheckSeconds < notificationPaymentOrderAlertCheckMinSeconds || normalized.PaymentOrderAlertCheckSeconds > notificationPaymentOrderAlertCheckMaxSeconds {
+		return fmt.Errorf("%w: 支付订单告警检查区间需在 60-604800 秒之间", ErrNotificationConfigInvalid)
+	}
 	return nil
 }
 
@@ -288,9 +309,11 @@ func NotificationCenterSettingToMap(setting NotificationCenterSetting) map[strin
 			"manual_fulfillment_pending": notificationSceneTemplateToMap(normalized.Templates.ManualFulfillmentPending),
 			"exception_alert":            notificationSceneTemplateToMap(normalized.Templates.ExceptionAlert),
 		},
-		"dedupe_ttl_seconds":               normalized.DedupeTTLSeconds,
-		"inventory_alert_interval_seconds": normalized.InventoryAlertIntervalSeconds,
-		"ignored_product_ids":              cloneUintSlice(normalized.IgnoredProductIDs),
+		"dedupe_ttl_seconds":                         normalized.DedupeTTLSeconds,
+		"inventory_alert_interval_seconds":           normalized.InventoryAlertIntervalSeconds,
+		"payment_order_alert_interval_seconds":       normalized.PaymentOrderAlertIntervalSeconds,
+		"payment_order_alert_check_interval_seconds": normalized.PaymentOrderAlertCheckSeconds,
+		"ignored_product_ids":                        cloneUintSlice(normalized.IgnoredProductIDs),
 	}
 }
 
@@ -330,6 +353,12 @@ func (s *SettingService) PatchNotificationCenterSetting(patch NotificationCenter
 	}
 	if patch.InventoryAlertIntervalSeconds != nil {
 		next.InventoryAlertIntervalSeconds = *patch.InventoryAlertIntervalSeconds
+	}
+	if patch.PaymentOrderAlertIntervalSeconds != nil {
+		next.PaymentOrderAlertIntervalSeconds = *patch.PaymentOrderAlertIntervalSeconds
+	}
+	if patch.PaymentOrderAlertCheckSeconds != nil {
+		next.PaymentOrderAlertCheckSeconds = *patch.PaymentOrderAlertCheckSeconds
 	}
 	if patch.IgnoredProductIDs != nil {
 		next.IgnoredProductIDs = cloneUintSlice(*patch.IgnoredProductIDs)
@@ -445,6 +474,8 @@ func notificationCenterSettingFromJSON(raw models.JSON, fallback NotificationCen
 	next.DefaultLocale = readString(raw, "default_locale", next.DefaultLocale)
 	next.DedupeTTLSeconds = readInt(raw, "dedupe_ttl_seconds", next.DedupeTTLSeconds)
 	next.InventoryAlertIntervalSeconds = readInt(raw, "inventory_alert_interval_seconds", next.InventoryAlertIntervalSeconds)
+	next.PaymentOrderAlertIntervalSeconds = readInt(raw, "payment_order_alert_interval_seconds", readInt(raw, "payment_failed_alert_interval_seconds", next.PaymentOrderAlertIntervalSeconds))
+	next.PaymentOrderAlertCheckSeconds = readInt(raw, "payment_order_alert_check_interval_seconds", next.PaymentOrderAlertCheckSeconds)
 	next.IgnoredProductIDs = readUintList(raw, "ignored_product_ids", next.IgnoredProductIDs)
 
 	if channelsMap := toStringAnyMap(raw["channels"]); channelsMap != nil {
@@ -566,6 +597,22 @@ func normalizeNotificationInventoryAlertInterval(ttl int) int {
 		return notificationInventoryAlertIntervalDefaultSeconds
 	}
 	return ttl
+}
+
+// normalizeNotificationPaymentOrderAlertInterval 归一化支付订单告警发送间隔
+func normalizeNotificationPaymentOrderAlertInterval(ttl int) int {
+	if ttl < notificationPaymentOrderAlertIntervalMinSeconds || ttl > notificationPaymentOrderAlertIntervalMaxSeconds {
+		return notificationPaymentOrderAlertIntervalDefaultSeconds
+	}
+	return ttl
+}
+
+// normalizeNotificationPaymentOrderAlertCheck 归一化支付订单告警检查区间
+func normalizeNotificationPaymentOrderAlertCheck(seconds int) int {
+	if seconds < notificationPaymentOrderAlertCheckMinSeconds || seconds > notificationPaymentOrderAlertCheckMaxSeconds {
+		return notificationPaymentOrderAlertCheckDefaultSeconds
+	}
+	return seconds
 }
 
 func normalizeEmailRecipients(items []string) []string {

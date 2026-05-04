@@ -335,6 +335,86 @@ func TestPaymentStatsExcludeWalletProvider(t *testing.T) {
 	}
 }
 
+func TestGetPaymentOrderAlertCountsExcludesChildOrdersAndWalletPayments(t *testing.T) {
+	repo, db := setupDashboardRepositoryTest(t)
+	now := time.Now().UTC().Truncate(time.Second)
+
+	parentOrder := &models.Order{
+		OrderNo:        "DJ-PENDING-001",
+		Status:         constants.OrderStatusPendingPayment,
+		Currency:       "CNY",
+		OriginalAmount: models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		DiscountAmount: models.NewMoneyFromDecimal(decimal.Zero),
+		TotalAmount:    models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if err := db.Create(parentOrder).Error; err != nil {
+		t.Fatalf("create parent pending order failed: %v", err)
+	}
+
+	childOrder := &models.Order{
+		OrderNo:        "DJ-PENDING-001-01",
+		ParentID:       &parentOrder.ID,
+		Status:         constants.OrderStatusPendingPayment,
+		Currency:       "CNY",
+		OriginalAmount: models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		DiscountAmount: models.NewMoneyFromDecimal(decimal.Zero),
+		TotalAmount:    models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if err := db.Create(childOrder).Error; err != nil {
+		t.Fatalf("create child pending order failed: %v", err)
+	}
+
+	onlineFailed := &models.Payment{
+		OrderID:         parentOrder.ID,
+		ChannelID:       1,
+		ProviderType:    constants.PaymentProviderOfficial,
+		ChannelType:     constants.PaymentChannelTypeAlipay,
+		InteractionMode: constants.PaymentInteractionRedirect,
+		Amount:          models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		FeeRate:         models.NewMoneyFromDecimal(decimal.Zero),
+		FeeAmount:       models.NewMoneyFromDecimal(decimal.Zero),
+		Currency:        "CNY",
+		Status:          constants.PaymentStatusFailed,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := db.Create(onlineFailed).Error; err != nil {
+		t.Fatalf("create online failed payment failed: %v", err)
+	}
+
+	walletFailed := &models.Payment{
+		OrderID:         parentOrder.ID,
+		ProviderType:    constants.PaymentProviderWallet,
+		ChannelType:     constants.PaymentChannelTypeBalance,
+		InteractionMode: constants.PaymentInteractionBalance,
+		Amount:          models.NewMoneyFromDecimal(decimal.NewFromInt(100)),
+		FeeRate:         models.NewMoneyFromDecimal(decimal.Zero),
+		FeeAmount:       models.NewMoneyFromDecimal(decimal.Zero),
+		Currency:        "CNY",
+		Status:          constants.PaymentStatusFailed,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := db.Create(walletFailed).Error; err != nil {
+		t.Fatalf("create wallet failed payment failed: %v", err)
+	}
+
+	counts, err := repo.GetPaymentOrderAlertCounts(now.Add(-time.Hour), now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("get payment order alert counts failed: %v", err)
+	}
+	if counts.PendingPaymentOrders != 1 {
+		t.Fatalf("pending payment orders want 1 got %d", counts.PendingPaymentOrders)
+	}
+	if counts.PaymentsFailed != 1 {
+		t.Fatalf("payments failed want 1 got %d", counts.PaymentsFailed)
+	}
+}
+
 func TestGetStockStatsUsesActiveManualSKUs(t *testing.T) {
 	repo, db := setupDashboardRepositoryTest(t)
 	category := createDashboardCategory(t, db, "dashboard-manual-stock")

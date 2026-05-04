@@ -314,6 +314,116 @@ func TestPatchNotificationCenterSettingPersistsInventoryAlertConfig(t *testing.T
 	}
 }
 
+func TestPatchNotificationCenterSettingPersistsPaymentOrderAlertConfig(t *testing.T) {
+	repo := newMockSettingRepo()
+	svc := NewSettingService(repo)
+	interval := 900
+	checkInterval := 7200
+
+	setting, err := svc.PatchNotificationCenterSetting(NotificationCenterSettingPatch{
+		PaymentOrderAlertIntervalSeconds: &interval,
+		PaymentOrderAlertCheckSeconds:    &checkInterval,
+	})
+	if err != nil {
+		t.Fatalf("patch notification center setting failed: %v", err)
+	}
+
+	if setting.PaymentOrderAlertIntervalSeconds != interval {
+		t.Fatalf("expected payment order interval %d, got %d", interval, setting.PaymentOrderAlertIntervalSeconds)
+	}
+	if setting.PaymentOrderAlertCheckSeconds != checkInterval {
+		t.Fatalf("expected payment order check interval %d, got %d", checkInterval, setting.PaymentOrderAlertCheckSeconds)
+	}
+
+	stored, err := svc.GetNotificationCenterSetting()
+	if err != nil {
+		t.Fatalf("get notification center setting failed: %v", err)
+	}
+	if stored.PaymentOrderAlertIntervalSeconds != interval {
+		t.Fatalf("stored payment order interval want %d got %d", interval, stored.PaymentOrderAlertIntervalSeconds)
+	}
+	if stored.PaymentOrderAlertCheckSeconds != checkInterval {
+		t.Fatalf("stored payment order check interval want %d got %d", checkInterval, stored.PaymentOrderAlertCheckSeconds)
+	}
+}
+
+func TestBuildPaymentOrderAlertDispatchPayloadsUseDashboardThresholds(t *testing.T) {
+	setting := NotificationCenterDefaultSetting()
+	setting.DefaultLocale = constants.LocaleZhCN
+	setting.PaymentOrderAlertIntervalSeconds = 600
+
+	payloads := buildPaymentOrderAlertDispatchPayloads(
+		setting,
+		DashboardSetting{
+			Alert: DashboardAlertSetting{
+				PendingPaymentOrdersThreshold: 5,
+				PaymentsFailedThreshold:       3,
+			},
+		},
+		queue.NotificationDispatchPayload{
+			EventType: constants.NotificationEventExceptionAlertCheck,
+			BizType:   constants.NotificationBizTypeDashboardAlert,
+			Data: map[string]interface{}{
+				"source": "scheduler",
+			},
+		},
+		repository.DashboardPaymentOrderAlertCountsRow{
+			PendingPaymentOrders: 6,
+			PaymentsFailed:       4,
+		},
+	)
+	if len(payloads) != 2 {
+		t.Fatalf("expected 2 payment order alert payloads, got %d", len(payloads))
+	}
+
+	byType := make(map[string]queue.NotificationDispatchPayload, len(payloads))
+	for _, payload := range payloads {
+		if payload.EventType != constants.NotificationEventExceptionAlert {
+			t.Fatalf("event type want exception_alert got %s", payload.EventType)
+		}
+		byType[fmt.Sprintf("%v", payload.Data["alert_type_key"])] = payload
+	}
+
+	pendingPayload, ok := byType[constants.NotificationAlertTypePendingOrders]
+	if !ok {
+		t.Fatal("expected pending payment alert payload")
+	}
+	if pendingPayload.Data["alert_value"] != "6" || pendingPayload.Data["alert_threshold"] != "5" {
+		t.Fatalf("pending alert value/threshold mismatch: %#v", pendingPayload.Data)
+	}
+	pendingMessage := fmt.Sprintf("%v", pendingPayload.Data["message"])
+	if !strings.Contains(pendingMessage, "待支付订单 6 笔") || !strings.Contains(pendingMessage, "10 分钟") {
+		t.Fatalf("unexpected pending payment message: %s", pendingMessage)
+	}
+
+	failedPayload, ok := byType[constants.NotificationAlertTypePaymentsFailed]
+	if !ok {
+		t.Fatal("expected payment failed alert payload")
+	}
+	if failedPayload.Data["alert_value"] != "4" || failedPayload.Data["alert_threshold"] != "3" {
+		t.Fatalf("payment failed alert value/threshold mismatch: %#v", failedPayload.Data)
+	}
+	failedMessage := fmt.Sprintf("%v", failedPayload.Data["message"])
+	if !strings.Contains(failedMessage, "支付失败 4 笔") || !strings.Contains(failedMessage, "10 分钟") {
+		t.Fatalf("unexpected payment failed message: %s", failedMessage)
+	}
+
+	payloads = buildPaymentOrderAlertDispatchPayloads(
+		setting,
+		DashboardSetting{
+			Alert: DashboardAlertSetting{
+				PendingPaymentOrdersThreshold: 5,
+				PaymentsFailedThreshold:       3,
+			},
+		},
+		queue.NotificationDispatchPayload{EventType: constants.NotificationEventExceptionAlertCheck},
+		repository.DashboardPaymentOrderAlertCountsRow{PendingPaymentOrders: 4, PaymentsFailed: 2},
+	)
+	if len(payloads) != 0 {
+		t.Fatalf("expected no payload below dashboard thresholds, got %d", len(payloads))
+	}
+}
+
 func TestBuildInventoryAlertDispatchPayloadsIncludesSummaryAndIgnoreRules(t *testing.T) {
 	setting := NotificationCenterDefaultSetting()
 	setting.DefaultLocale = constants.LocaleEnUS
@@ -437,7 +547,7 @@ func TestResolveInventoryAlertTypeKey(t *testing.T) {
 			name: "use code directly",
 			data: map[string]interface{}{
 				"alert_type_key": constants.NotificationAlertTypeLowStockProducts,
-				"alert_type":      "低库存商品",
+				"alert_type":     "低库存商品",
 			},
 			want: constants.NotificationAlertTypeLowStockProducts,
 		},

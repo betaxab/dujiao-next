@@ -16,6 +16,7 @@ import (
 // 说明：仅聚合统计数据，不承载业务规则。
 type DashboardRepository interface {
 	GetOverview(startAt, endAt time.Time) (DashboardOverviewRow, error)
+	GetPaymentOrderAlertCounts(startAt, endAt time.Time) (DashboardPaymentOrderAlertCountsRow, error)
 	GetOrderTrends(startAt, endAt time.Time) ([]DashboardOrderTrendRow, error)
 	GetPaymentTrends(startAt, endAt time.Time) ([]DashboardPaymentTrendRow, error)
 	GetProfitOverview(startAt, endAt time.Time) (DashboardProfitOverviewRow, error)
@@ -41,6 +42,12 @@ type DashboardOverviewRow struct {
 	NewUsers             int64
 	ActiveProducts       int64
 	Currency             string
+}
+
+// DashboardPaymentOrderAlertCountsRow 支付订单告警计数
+type DashboardPaymentOrderAlertCountsRow struct {
+	PendingPaymentOrders int64
+	PaymentsFailed       int64
 }
 
 // DashboardProfitOverviewRow 利润总览原始统计结果
@@ -264,6 +271,25 @@ func (r *GormDashboardRepository) GetOverview(startAt, endAt time.Time) (Dashboa
 			Order("id DESC").
 			Limit(1).
 			Pluck("currency", &result.Currency).Error
+	}
+
+	return result, nil
+}
+
+// GetPaymentOrderAlertCounts 获取支付订单告警计数
+func (r *GormDashboardRepository) GetPaymentOrderAlertCounts(startAt, endAt time.Time) (DashboardPaymentOrderAlertCountsRow, error) {
+	result := DashboardPaymentOrderAlertCountsRow{}
+
+	if err := r.db.Model(&models.Order{}).
+		Where("parent_id IS NULL AND status = ? AND created_at >= ? AND created_at < ?", constants.OrderStatusPendingPayment, startAt, endAt).
+		Count(&result.PendingPaymentOrders).Error; err != nil {
+		return result, err
+	}
+
+	if err := onlinePaymentBase(r.db, startAt, endAt).
+		Where("status = ?", constants.PaymentStatusFailed).
+		Count(&result.PaymentsFailed).Error; err != nil {
+		return result, err
 	}
 
 	return result, nil

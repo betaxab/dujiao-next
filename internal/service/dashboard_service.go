@@ -284,6 +284,14 @@ func (s *DashboardService) GetInventoryAlertItems(_ context.Context, lowStockThr
 	return s.repo.GetInventoryAlertItems(lowStockThreshold)
 }
 
+// GetPaymentOrderAlertCounts 获取支付订单告警计数
+func (s *DashboardService) GetPaymentOrderAlertCounts(_ context.Context, startAt, endAt time.Time) (repository.DashboardPaymentOrderAlertCountsRow, error) {
+	if s == nil || s.repo == nil {
+		return repository.DashboardPaymentOrderAlertCountsRow{}, nil
+	}
+	return s.repo.GetPaymentOrderAlertCounts(startAt, endAt)
+}
+
 // GetTrends 获取仪表盘趋势
 func (s *DashboardService) GetTrends(ctx context.Context, input DashboardQueryInput) (*DashboardTrendResponse, error) {
 	if s == nil || s.repo == nil {

@@ -17,6 +17,10 @@ func (s dashboardServiceRepoStub) GetOverview(startAt, endAt time.Time) (reposit
 	return s.overview, nil
 }
 
+func (s dashboardServiceRepoStub) GetPaymentOrderAlertCounts(startAt, endAt time.Time) (repository.DashboardPaymentOrderAlertCountsRow, error) {
+	return repository.DashboardPaymentOrderAlertCountsRow{}, nil
+}
+
 func (s dashboardServiceRepoStub) GetOrderTrends(startAt, endAt time.Time) ([]repository.DashboardOrderTrendRow, error) {
 	return []repository.DashboardOrderTrendRow{}, nil
 }
